@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KomponentBul</title>
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f7f6;
+        margin: 0;
+        padding: 40px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #0f172a; margin-bottom: 5px; }
+    p.sub { color: #64748b; margin-top: 0; }
+    .search-box { display: flex; gap: 12px; margin: 25px 0; }
+    input[type="text"] {
+        flex: 1; padding: 14px 18px; border: 2px solid #e2e8f0;
+        border-radius: 8px; font-size: 16px;
+    }
+    input[type="text"]:focus { border-color: #3b82f6; outline: none; }
+    button.search-btn {
+        padding: 14px 30px; background-color: #3b82f6; color: white;
+        border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
+        cursor: pointer;
+    }
+    button.search-btn:hover { background-color: #2563eb; }
+    .loading { display: none; color: #3b82f6; font-weight: bold; margin-bottom: 15px; }
+    table {
+        width: 100%; border-collapse: collapse; background: white;
+        border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        display: none;
+    }
+    th, td { padding: 16px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th { background-color: #f8fafc; color: #475569; font-weight: 600; font-size: 14px; }
+    tr:hover { background-color: #f8fafc; }
+    .en-ucuz { background-color: #ecfdf5; }
+    .canli-etiket { color: #10b981; font-size: 12px; font-weight: bold; }
+    .tahmini-etiket { color: #b45309; font-size: 12px; font-weight: bold; }
+    a.incele-btn {
+        display: inline-block; padding: 8px 16px; background: #1e293b;
+        color: white; border-radius: 6px; font-size: 13px; text-decoration: none;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>KomponentBul</h1>
+    <p class="sub">Elektronik parça kodunu gir, tüm kaynaklardaki fiyatları anında karşılaştır.</p>
+
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Parça kodu (örn. STM32, 1K direnç)">
+        <button class="search-btn" onclick="ara()">Sorgula</button>
+    </div>
+
+    <div class="loading" id="loadingText">Kaynaklar taranıyor...</div>
+
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>Tedarikçi</th>
+                <th>Ürün</th>
+                <th>Fiyat</th>
+                <th>Durum</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+    </table>
+</div>
+
+<script>
+async function ara() {
+    const kod = document.getElementById('searchInput').value.trim();
+    if (!kod) { alert("Lütfen bir parça kodu girin."); return; }
+
+    const loading = document.getElementById('loadingText');
+    const table = document.getElementById('resultsTable');
+    const tbody = document.getElementById('resultsBody');
+
+    loading.style.display = 'block';
+    table.style.display = 'none';
+    tbody.innerHTML = '';
+
+    try {
+        const response = await fetch(`/ara?kod=${encodeURIComponent(kod)}`);
+        if (!response.ok) throw new Error("Sunucu yanıt vermedi.");
+        const data = await response.json();
+
+        loading.style.display = 'none';
+
+        if (!data.sonuclar || data.sonuclar.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5">Sonuç bulunamadı.</td></tr>';
+            table.style.display = 'table';
+            return;
+        }
+
+        data.sonuclar.forEach((item, index) => {
+            const durumHtml = item.canli
+                ? '<span class="canli-etiket">● Canlı veri</span>'
+                : '<span class="tahmini-etiket">○ Tahmini</span>';
+            const satirClass = index === 0 ? 'en-ucuz' : '';
+
+            tbody.innerHTML += `
+                <tr class="${satirClass}">
+                    <td><strong>${item.tedarikci}</strong></td>
+                    <td>${item.urun_adi}</td>
+                    <td><strong>${item.fiyat_metni}</strong></td>
+                    <td>${durumHtml}</td>
+                    <td><a class="incele-btn" href="${item.url}" target="_blank">İncele</a></td>
+                </tr>
+            `;
+        });
+
+        table.style.display = 'table';
+    } catch (error) {
+        loading.style.display = 'none';
+        tbody.innerHTML = '<tr><td colspan="5">Sunucuya ulaşılamadı. Sunucunun çalıştığından emin ol.</td></tr>';
+        table.style.display = 'table';
+        console.error(error);
+    }
+}
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') ara();
+});
+</script>
+</body>
+</html>
