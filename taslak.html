@@ -37,7 +37,7 @@
     tr:hover { background-color: #f8fafc; }
     .en-ucuz { background-color: #ecfdf5; }
     .canli-etiket { color: #10b981; font-size: 12px; font-weight: bold; }
-    .tahmini-etiket { color: #b45309; font-size: 12px; font-weight: bold; }
+    .stok-yok-etiket { color: #dc2626; font-size: 12px; font-weight: bold; }
     a.incele-btn {
         display: inline-block; padding: 8px 16px; background: #1e293b;
         color: white; border-radius: 6px; font-size: 13px; text-decoration: none;
@@ -84,7 +84,8 @@ async function ara() {
     tbody.innerHTML = '';
 
     try {
-        const response = await fetch(`/ara?kod=${encodeURIComponent(kod)}`);
+        // API adresi ve parametresi main.py'ye göre güncellendi
+        const response = await fetch(`/arama?q=${encodeURIComponent(kod)}`);
         if (!response.ok) throw new Error("Sunucu yanıt vermedi.");
         const data = await response.json();
 
@@ -97,18 +98,25 @@ async function ara() {
         }
 
         data.sonuclar.forEach((item, index) => {
-            const durumHtml = item.canli
-                ? '<span class="canli-etiket">● Canlı veri</span>'
-                : '<span class="tahmini-etiket">○ Tahmini</span>';
-            const satirClass = index === 0 ? 'en-ucuz' : '';
+            // Stok durumuna göre renkli etiket ataması
+            let durumHtml = "";
+            if (item.Durum === "Stokta Yok") {
+                durumHtml = '<span class="stok-yok-etiket">○ Stokta Yok</span>';
+            } else {
+                durumHtml = '<span class="canli-etiket">● Canlı Veri</span>';
+            }
 
+            // Eğer ürün ilk sıradaysa ve stokta varsa "en ucuz" olarak yeşil vurgula
+            const satirClass = (index === 0 && item.Durum !== "Stokta Yok") ? 'en-ucuz' : '';
+
+            // main.py'den gelen yeni anahtar kelimeler (item.Tedarikci, item.Urun vb.) kullanıldı
             tbody.innerHTML += `
                 <tr class="${satirClass}">
-                    <td><strong>${item.tedarikci}</strong></td>
-                    <td>${item.urun_adi}</td>
-                    <td><strong>${item.fiyat_metni}</strong></td>
+                    <td><strong>${item.Tedarikci}</strong></td>
+                    <td>${item.Urun}</td>
+                    <td><strong>${item.Fiyat}</strong></td>
                     <td>${durumHtml}</td>
-                    <td><a class="incele-btn" href="${item.url}" target="_blank">İncele</a></td>
+                    <td><a class="incele-btn" href="${item.Link}" target="_blank">İncele</a></td>
                 </tr>
             `;
         });
