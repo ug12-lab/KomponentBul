@@ -3,169 +3,166 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import cloudscraper
 from bs4 import BeautifulSoup
-import urllib.parse
+from urllib.parse import urljoin
+import re
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # "*" ile allow_credentials=True birlikte olamaz
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Gerçek bir tarayıcı gibi görünmek için gelişmiş Cloudscraper ayarları
+# cloudscraper: Direnc.net'in Cloudflare korumasını aşmak için (Render'ın
+# yurtdışı IP'si buna takılıyordu, log'da 403 Forbidden görmüştük)
 scraper = cloudscraper.create_scraper(
-    browser={
-        'browser': 'chrome',
-        'platform': 'windows',
-        'desktop': True,
-        'mobile': False
-    }
+    browser={"browser": "chrome", "platform": "windows", "desktop": True}
 )
 
-# İstek atarken eklenecek özel tarayıcı kimlikleri (Headers)
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
-}
+# --- GERÇEK ve DOĞRULANMIŞ selector'lar (sohbetimizde inspect edilen HTML'lerden) ---
+SITE_CONFIGS = [
+    {
+        "ad": "Direnc.net",
+        "base_url": "https://www.direnc.net",
+        "arama_url": lambda kod: f"https://www.direnc.net/arama?q={kod}",
+        "kart_secici": ("div", {"class": "productItem"}),
+        "isim_secici": ("a", {"class": "productDescription"}),
+        "fiyat_secici": ("span", {"class": "currentPrice"}),
+        "stok_yok_secici": ("span", {"class": "out-of-stock"}),
+    },
+    {
+        "ad": "Robotistan",
+        "base_url": "https://www.robotistan.com",
+        "arama_url": lambda kod: f"https://www.robotistan.com/arama?q={kod}",
+        "kart_secici": ("div", {"class": "product-item"}),
+        "isim_secici": ("a", {"class": "product-title"}),
+        "fiyat_secici": ("strong", {"class": "product-price"}),
+        "stok_yok_secici": ("span", {"class": "out-of-stock"}),
+    },
+    {
+        "ad": "Elektromarketim",
+        "base_url": "https://www.elektromarketim.com",
+        "arama_url": lambda kod: f"https://www.elektromarketim.com/arama?q={kod}",
+        "kart_secici": ("div", {"class": "productDetails"}),
+        "isim_secici": ("a", {"class": "vitrin-product-title"}),
+        "fiyat_secici": ("div", {"class": "currentPrice"}),
+        "stok_yok_secici": None,  # bu sitede stok bilgisi 0,00 TL fiyatla anlaşılıyor
+    },
+]
+
+
+def fiyat_parse(fiyat_metni: str):
+    """'1.234,50 TL' -> 1234.50"""
+    if not fiyat_metni:
+        return None
+    temiz = re.sub(r"[^\d,.]", "", fiyat_metni)
+    temiz = temiz.replace(".", "").replace(",", ".")
+    try:
+        return float(temiz)
+    except ValueError:
+        return None
+
+
+def site_tara(site: dict, kod: str) -> list[dict]:
+    sonuclar = []
+    arama_url = site["arama_url"](kod)
+
+    try:
+        r = scraper.get(arama_url, timeout=12)
+        if r.status_code != 200:
+            print(f"[{site['ad']}] engellendi, status: {r.status_code}")
+            return sonuclar
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        tag, attrs = site["kart_secici"]
+        kartlar = soup.find_all(tag, attrs)[:5]
+
+        for kart in kartlar:
+            i_tag, i_attrs = site["isim_secici"]
+            isim_el = kart.find(i_tag, i_attrs)
+            if not isim_el:
+                continue
+
+            isim_metni = isim_el.get_text(strip=True) or isim_el.get("title", "")
+            urun_href = isim_el.get("href")
+            urun_url = urljoin(site["base_url"], urun_href) if urun_href else arama_url
+
+            # 1. Sitede açık "stokta yok" etiketi var mı?
+            stok_yok_secici = site.get("stok_yok_secici")
+            stokta_yok = False
+            if stok_yok_secici:
+                sy_tag, sy_attrs = stok_yok_secici
+                if kart.find(sy_tag, sy_attrs):
+                    stokta_yok = True
+
+            if stokta_yok:
+                sonuclar.append({
+                    "Tedarikci": site["ad"],
+                    "Urun": isim_metni,
+                    "Fiyat": "-",
+                    "_fiyat_sayi": 999999999.0,
+                    "Durum": "Stokta Yok",
+                    "Link": urun_url,
+                })
+                continue
+
+            # 2. Fiyat etiketini bul ve parse et
+            f_tag, f_attrs = site["fiyat_secici"]
+            fiyat_el = kart.find(f_tag, f_attrs)
+            if not fiyat_el:
+                continue
+
+            fiyat_metni = fiyat_el.get_text(separator=" ", strip=True)
+            fiyat_sayi = fiyat_parse(fiyat_metni)
+            if fiyat_sayi is None:
+                continue
+
+            # 3. Fiyat 0 ise (Elektromarketim'in stok bitince yaptığı gibi) stokta yok kabul et
+            if fiyat_sayi == 0:
+                sonuclar.append({
+                    "Tedarikci": site["ad"],
+                    "Urun": isim_metni,
+                    "Fiyat": "-",
+                    "_fiyat_sayi": 999999999.0,
+                    "Durum": "Stokta Yok",
+                    "Link": urun_url,
+                })
+                continue
+
+            if "TL" not in fiyat_metni and "₺" not in fiyat_metni:
+                fiyat_metni = f"{fiyat_metni} TL"
+
+            sonuclar.append({
+                "Tedarikci": site["ad"],
+                "Urun": isim_metni,
+                "Fiyat": fiyat_metni,
+                "_fiyat_sayi": fiyat_sayi,
+                "Durum": "Canlı Veri",
+                "Link": urun_url,
+            })
+
+    except Exception as e:
+        print(f"[{site['ad']}] hata: {e}")
+
+    return sonuclar
+
 
 @app.get("/")
 def ana_sayfa():
     return FileResponse("taslak.html")
 
+
 @app.get("/arama")
 def arama_yap(q: str):
-    sonuclar = []
-    q_encoded = urllib.parse.quote(q)
+    tum_sonuclar = []
+    for site in SITE_CONFIGS:
+        tum_sonuclar.extend(site_tara(site, q))
 
-    # 1. ELEKTROMARKETİM
-    try:
-        url_elk = f"https://www.elektromarketim.com/arama?q={q_encoded}"
-        res_elk = scraper.get(url_elk, headers=HEADERS, timeout=10)
-        
-        if res_elk.status_code == 200:
-            soup_elk = BeautifulSoup(res_elk.text, 'html.parser')
-            # Elektromarketim'in güncel ürün liste elemanları
-            urunler = soup_elk.select('.product-item, .fl.col-12.text-center, li.col-3')
-            
-            for urun in urunler[:3]:
-                isim_isim = urun.select_one('.product-name, .product-title, a.product-image-link')
-                link_isim = urun.select_one('a')
-                fiyat_etiketi = urun.select_one('.product-price, span.product-price')
-                stok_uyarisi = urun.select_one('.tanitim-stock-alert')
-                
-                if isim_isim and link_isim:
-                    isim = isim_isim.text.strip()
-                    link = link_isim.get('href')
-                    if link and not link.startswith('http'):
-                        link = "https://www.elektromarketim.com" + link
-                    
-                    ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else "0,00"
-                    if "0,00" in ham_fiyat or stok_uyarisi or not ham_fiyat:
-                        fiyat_gosterim = "Stokta Yok"
-                        stok_durum = "Stokta Yok"
-                    else:
-                        fiyat_gosterim = f"{ham_fiyat} TL"
-                        stok_durum = "Canlı Veri"
-                    
-                    sonuclar.append({
-                        "Tedarikci": "Elektromarketim",
-                        "Urun": isim if isim else "Elektronik Parça",
-                        "Fiyat": fiyat_gosterim,
-                        "Durum": stok_durum,
-                        "Link": link
-                    })
-    except Exception as e:
-        print("Elektromarketim Hata:", str(e))
+    tum_sonuclar.sort(key=lambda x: x["_fiyat_sayi"])
+    for s in tum_sonuclar:
+        s.pop("_fiyat_sayi", None)
 
-    # 2. DİRENC.NET
-    try:
-        url_dir = f"https://www.direnc.net/arama?q={q_encoded}"
-        res_dir = scraper.get(url_dir, headers=HEADERS, timeout=10)
-        
-        if res_dir.status_code == 200:
-            soup_dir = BeautifulSoup(res_dir.text, 'html.parser')
-            urunler = soup_dir.select('.product-box, .urun-item, .col-product') 
-            
-            for urun in urunler[:3]:
-                isim_isim = urun.select_one('.product-name, .title')
-                link_isim = urun.select_one('a')
-                fiyat_isim = urun.select_one('.product-price, .current-price')
-                
-                if isim_isim and link_isim:
-                    isim = isim_isim.text.strip()
-                    link = link_isim.get('href')
-                    if link and not link.startswith('http'):
-                        link = "https://www.direnc.net" + link
-                        
-                    ham_fiyat = fiyat_isim.text.strip() if fiyat_isim else "0,00"
-                    if "0,00" in ham_fiyat or not ham_fiyat:
-                        fiyat_gosterim = "Stokta Yok"
-                        stok_durum = "Stokta Yok"
-                    else:
-                        fiyat_gosterim = ham_fiyat
-                        stok_durum = "Canlı Veri"
-                    
-                    sonuclar.append({
-                        "Tedarikci": "Direnc.net",
-                        "Urun": isim,
-                        "Fiyat": fiyat_gosterim,
-                        "Durum": stok_durum,
-                        "Link": link
-                    })
-    except Exception as e:
-        print("Direnc.net Hata:", str(e))
-
-    # 3. ROBOTİSTAN
-    try:
-        url_rob = f"https://www.robotistan.com/arama?q={q_encoded}"
-        res_rob = scraper.get(url_rob, headers=HEADERS, timeout=10)
-        
-        if res_rob.status_code == 200:
-            soup_rob = BeautifulSoup(res_rob.text, 'html.parser')
-            urunler = soup_rob.select('.product-item, .col-md-3, .product-wrapper') 
-            
-            for urun in urunler[:3]:
-                isim_isim = urun.select_one('.product-name, .detail h2')
-                link_isim = urun.select_one('a')
-                fiyat_isim = urun.select_one('.product-price, .current-price')
-                
-                if isim_isim and link_isim:
-                    isim = isim_isim.text.strip()
-                    link = link_isim.get('href')
-                    if link and not link.startswith('http'):
-                        link = "https://www.robotistan.com" + link
-                    
-                    ham_fiyat = fiyat_isim.text.strip() if fiyat_isim else "0,00"
-                    if "0,00" in ham_fiyat or not ham_fiyat:
-                        fiyat_gosterim = "Stokta Yok"
-                        stok_durum = "Stokta Yok"
-                    else:
-                        fiyat_gosterim = ham_fiyat
-                        stok_durum = "Canlı Veri"
-                    
-                    sonuclar.append({
-                        "Tedarikci": "Robotistan",
-                        "Urun": isim,
-                        "Fiyat": fiyat_gosterim,
-                        "Durum": stok_durum,
-                        "Link": link
-                    })
-    except Exception as e:
-        print("Robotistan Hata:", str(e))
-
-    # FİYATA GÖRE SIRALAMA ALGORİTMASI
-    def fiyat_temizle(fiyat_str):
-        if "Stokta Yok" in fiyat_str:
-            return 999999.0
-        temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',')
-        temiz = temiz.replace(',', '.')
-        try:
-            return float(temiz)
-        except:
-            return 999999.0
-
-    sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
-    return {"sonuclar": sonuclar}
+    return {"sonuclar": tum_sonuclar}
