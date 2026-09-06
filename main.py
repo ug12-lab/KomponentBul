@@ -2,10 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import cloudscraper
+from fastapi.responses import FileResponse
 from bs4 import BeautifulSoup
 import urllib.parse
 
 app = FastAPI()
+@app.get("/")
+def ana_sayfa():
+    return FileResponse("taslak.html")
 
 # Arayüz (taslak.html) ile API'nin haberleşebilmesi için güvenlik izinleri
 app.add_middleware(
