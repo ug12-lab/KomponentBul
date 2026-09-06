@@ -1,17 +1,12 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import cloudscraper
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 
 app = FastAPI()
-@app.get("/")
-def ana_sayfa():
-    return FileResponse("taslak.html")
 
-# Arayüz (taslak.html) ile API'nin haberleşebilmesi için güvenlik izinleri
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +15,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Bot korumalarını (Cloudflare vb.) aşmak için insan taklidi yapan tarayıcı nesnesi
 scraper = cloudscraper.create_scraper(
     browser={
         'browser': 'chrome',
@@ -29,36 +23,37 @@ scraper = cloudscraper.create_scraper(
     }
 )
 
+@app.get("/")
+def ana_sayfa():
+    return FileResponse("taslak.html")
+
 @app.get("/arama")
 def arama_yap(q: str):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
 
-    # ==========================================
     # 1. ELEKTROMARKETİM
-    # ==========================================
     try:
         url_elk = f"https://www.elektromarketim.com/arama?q={q_encoded}"
         res_elk = scraper.get(url_elk, timeout=10)
-        soup_elk = BeautifulSoup(res_elk.text, 'html.parser')
+        print("Elektromarketim Status:", res_elk.status_code) # Render loglarında göreceğiz
         
-        urunler = soup_elk.select('.fl.col-12.text-center, .product-item') # Ürün kartları
+        soup_elk = BeautifulSoup(res_elk.text, 'html.parser')
+        urunler = soup_elk.select('.fl.col-12.text-center, .product-item, .box')
         
         for urun in urunler[:3]:
             isim_isim = urun.select_one('.product-name, .product-title, a')
             link_isim = urun.select_one('a')
             fiyat_etiketi = urun.select_one('.product-price')
-            stok_uyarisi = urun.select_one('.tanitim-stock-alert') # Gönderdiğin HTML'den alındı
+            stok_uyarisi = urun.select_one('.tanitim-stock-alert')
             
             if isim_isim and link_isim and fiyat_etiketi:
                 isim = isim_isim.text.strip()
                 link = link_isim.get('href')
-                if not link.startswith('http'):
+                if link and not link.startswith('http'):
                     link = "https://www.elektromarketim.com" + link
                 
                 ham_fiyat = fiyat_etiketi.text.strip()
-                
-                # Stok kontrolü (Fiyat 0,00 ise veya Stok uyarısı varsa)
                 if "0,00" in ham_fiyat or stok_uyarisi:
                     fiyat_gosterim = "Stokta Yok"
                     stok_durum = "Stokta Yok"
@@ -73,18 +68,17 @@ def arama_yap(q: str):
                     "Durum": stok_durum,
                     "Link": link
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        print("Elektromarketim Hata:", str(e))
 
-    # ==========================================
-    # 2. DİRENC.NET (Bot engeli aşıldı)
-    # ==========================================
+    # 2. DİRENC.NET
     try:
         url_dir = f"https://www.direnc.net/arama?q={q_encoded}"
         res_dir = scraper.get(url_dir, timeout=10)
-        soup_dir = BeautifulSoup(res_dir.text, 'html.parser')
+        print("Direnc.net Status:", res_dir.status_code)
         
-        urunler = soup_dir.select('.product-box') 
+        soup_dir = BeautifulSoup(res_dir.text, 'html.parser')
+        urunler = soup_dir.select('.product-box, .product-item') 
         for urun in urunler[:3]:
             isim_isim = urun.select_one('.product-name')
             link_isim = urun.select_one('a')
@@ -93,7 +87,7 @@ def arama_yap(q: str):
             if isim_isim and link_isim and fiyat_isim:
                 isim = isim_isim.text.strip()
                 link = link_isim.get('href')
-                if not link.startswith('http'):
+                if link and not link.startswith('http'):
                     link = "https://www.direnc.net" + link
                     
                 ham_fiyat = fiyat_isim.text.strip()
@@ -111,18 +105,17 @@ def arama_yap(q: str):
                     "Durum": stok_durum,
                     "Link": link
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        print("Direnc.net Hata:", str(e))
 
-    # ==========================================
     # 3. ROBOTİSTAN
-    # ==========================================
     try:
         url_rob = f"https://www.robotistan.com/arama?q={q_encoded}"
         res_rob = scraper.get(url_rob, timeout=10)
-        soup_rob = BeautifulSoup(res_rob.text, 'html.parser')
+        print("Robotistan Status:", res_rob.status_code)
         
-        urunler = soup_rob.select('.product-item, .col-md-3.col-sm-4.col-xs-6') 
+        soup_rob = BeautifulSoup(res_rob.text, 'html.parser')
+        urunler = soup_rob.select('.product-item, .col-md-3') 
         for urun in urunler[:3]:
             isim_isim = urun.select_one('.product-name')
             link_isim = urun.select_one('a')
@@ -131,7 +124,7 @@ def arama_yap(q: str):
             if isim_isim and link_isim and fiyat_isim:
                 isim = isim_isim.text.strip()
                 link = link_isim.get('href')
-                if not link.startswith('http'):
+                if link and not link.startswith('http'):
                     link = "https://www.robotistan.com" + link
                 
                 ham_fiyat = fiyat_isim.text.strip()
@@ -149,17 +142,13 @@ def arama_yap(q: str):
                     "Durum": stok_durum,
                     "Link": link
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        print("Robotistan Hata:", str(e))
 
-    # ==========================================
-    # FİYATA GÖRE SIRALAMA ALGORİTMASI
-    # ==========================================
+    # SIRALAMA
     def fiyat_temizle(fiyat_str):
         if "Stokta Yok" in fiyat_str:
-            return 999999.0 # Stokta olmayanları listenin en sonuna at
-        
-        # Metinden sadece rakamları ve virgülü al
+            return 999999.0
         temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',')
         temiz = temiz.replace(',', '.')
         try:
@@ -167,7 +156,5 @@ def arama_yap(q: str):
         except:
             return 999999.0
 
-    # Sonuçları en ucuzdan en pahalıya doğru sırala
     sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
-
     return {"sonuclar": sonuclar}
