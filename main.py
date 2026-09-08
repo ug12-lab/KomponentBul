@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
 import re
+from curl_cffi import requests as tls_requests # 403'leri yıkan yeni silahımız
 
 app = FastAPI()
 
@@ -26,6 +26,16 @@ TEDARIKCILER = {
             "kutu": ".product-item, .fl.col-12, li.col-3, .box",
             "isim": ".product-name, .product-title, h2 a, a.product-image-link",
             "fiyat": ".product-price, .price"
+        }
+    },
+    "Direnc.net": { # Artık 403 yemeyecek
+        "url_sablonu": "https://www.direnc.net/arama?q={}",
+        "base_url": "https://www.direnc.net",
+        "kategori": "Perakende",
+        "seciciler": {
+            "kutu": ".product-box, .product-item",
+            "isim": ".product-name, .title",
+            "fiyat": ".product-price, .current-price"
         }
     },
     "Robotistan": {
@@ -57,6 +67,16 @@ TEDARIKCILER = {
             "isim": ".product-title, .product-name, h2",
             "fiyat": ".current-price, .product-price, .price"
         }
+    },
+    "Ozdisan": { # 404 sorununu çözdüğümüz link yapısı
+        "url_sablonu": "https://www.ozdisan.com/Search?Word={}",
+        "base_url": "https://www.ozdisan.com",
+        "kategori": "Toptan",
+        "seciciler": {
+            "kutu": ".product-item, .product-card, .list-item",
+            "isim": ".product-name, .product-title, h2, a",
+            "fiyat": ".price, .wholesale-price, .product-price"
+        }
     }
 }
 
@@ -79,14 +99,9 @@ def site_tara(ad, ayarlar, q_encoded):
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
     
-    bireysel_scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
-    }
-    
     try:
-        res = bireysel_scraper.get(url, headers=headers, timeout=15)
+        # TLS parmak izini "chrome110" olarak simüle ederek anti-bot sistemlerini geçiyoruz
+        res = tls_requests.get(url, impersonate="chrome110", timeout=15)
         print(f"{ad} Status: {res.status_code}")
         
         if res.status_code == 200:
@@ -110,7 +125,6 @@ def site_tara(ad, ayarlar, q_encoded):
                             
                         ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
                         
-                        # Kararlı Fiyat ve Stok Doğrulama
                         kart_metni = urun.text.lower()
                         if "tükendi" in kart_metni or not ham_fiyat or "0,00" in ham_fiyat:
                             fiyat_gosterim = "Stokta Yok"
@@ -139,7 +153,7 @@ def arama_yap(q: str):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             try:
