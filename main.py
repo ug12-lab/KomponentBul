@@ -12,7 +12,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # "*" ile allow_credentials=True birlikte kullanılamaz
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -22,7 +22,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".ems-prd, .product-item, div[class*='product']"} 
+        "seciciler": {"kutu": ".ems-prd, .product-item, div[class*='product']"}
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
@@ -34,7 +34,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.motorobit.com/arama?q={}",
         "base_url": "https://www.motorobit.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".showcase, div[class*='product'], li[class*='product']"} 
+        "seciciler": {"kutu": ".showcase, div[class*='product'], li[class*='product']"}
     },
     "Robolink": {
         "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
@@ -44,91 +44,133 @@ TEDARIKCILER = {
     }
 }
 
-@app.get("/")
-def ana_sayfa():
-    return FileResponse("taslak.html")
+# CSS ile gizlenmiş (görünmez) elementleri tespit etmek için kullanılan class/attribute'lar.
+# Birçok site (ör. Robolink) "Tükendi" bloğunu HER üründe DOM'a basar, sadece
+# stoktaysa bu bloğu bu class'larla gizler. Bu yüzden salt metin araması yanıltıcıdır.
+GIZLI_ISARETLERI = {"d-none", "hidden", "invisible", "display-none", "hide"}
+
+
+def gorunur_mu(etiket):
+    """Bir elementin (veya üst elementlerinden birinin) CSS ile gizlenip
+    gizlenmediğini kontrol eder. Gizliyse False döner."""
+    for el in [etiket] + list(etiket.parents):
+        if not hasattr(el, "get"):
+            continue
+        siniflar = el.get("class", []) or []
+        if any(c in GIZLI_ISARETLERI for c in siniflar):
+            return False
+        stil = (el.get("style", "") or "").replace(" ", "").lower()
+        if "display:none" in stil or "visibility:hidden" in stil:
+            return False
+        if el.has_attr("hidden"):
+            return False
+    return True
+
 
 def fiyat_temizle(fiyat_str):
     if not fiyat_str or "Tükendi" in fiyat_str or "Stokta" in fiyat_str:
         return 999999.0
-    temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',' or c == '.')
+    temiz = ''.join(c for c in fiyat_str if c.isdigit() or c in ',.')
     temiz = temiz.replace('.', '').replace(',', '.')
     try:
         return float(temiz)
-    except:
+    except Exception:
         return 999999.0
+
+
+def metni_sayiya_cevir(fiyat_metni):
+    """'2.151,00 TL' -> 2151.00"""
+    temiz = re.sub(r'[^\d,.]', '', fiyat_metni)
+    temiz = temiz.replace('.', '').replace(',', '.')
+    try:
+        return float(temiz)
+    except Exception:
+        return None
+
 
 def site_tara(ad, ayarlar, q_encoded):
     bulunanlar = []
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
-    
+
     try:
         res = tls_requests.get(url, impersonate="chrome110", timeout=15)
-        
+
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
-            
+
             eklenen_isimler = set()
             sayac = 0
-            
+
             for urun in urunler:
                 if sayac >= 5:
                     break
-                    
+
                 try:
                     isim = ""
                     link = url
-                    
+
                     # 1. İSİM BULUCU
                     for a in urun.find_all('a'):
                         text = a.text.replace("Yeni", "").replace("YENİ", "").strip()
                         text = re.sub(r'\{.*?\}', '', text)
-                        
+
                         if len(text) > len(isim) and "incele" not in text.lower() and "sepete ekle" not in text.lower():
                             isim = text
                             temp_link = a.get('href', '')
                             if temp_link:
                                 link = temp_link
-                                
+
                     isim = re.sub(r'\s+', ' ', isim).strip()
-                    
+
                     if len(isim) < 5 or isim in eklenen_isimler:
                         continue
-                        
+
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
-                    # 2. HASSAS STOK KONTROLÜ (Görünmez yazılara aldanmaz)
+                    # 2. GÖRÜNÜRLÜK-FARKINDA STOK KONTROLÜ
+                    # "Tükendi" bloğu CSS ile gizlenmişse (d-none vb.) bu ürün aslında stokta demektir.
                     stokta_yok_mu = False
-                    
-                    # Sadece resmi tükenme sınıfları varsa
-                    if urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
+
+                    aday = urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock')
+                    if aday and gorunur_mu(aday):
                         stokta_yok_mu = True
-                        
-                    # Sadece buton ve A etiketlerindeki net yazılara bak
+
                     if not stokta_yok_mu:
-                        for buton in urun.find_all(['button', 'a']):
-                            if buton.text:
-                                b_metin = buton.text.lower().strip()
-                                if b_metin in ["tükendi", "stokta yok", "tükendi̇", "stokta kalmadı"]:
-                                    stokta_yok_mu = True
-                                    break
+                        for etiket in urun.find_all(['div', 'span', 'a', 'p', 'b', 'button']):
+                            metin = etiket.text.strip().lower()
+                            if metin in ["tükendi", "stokta yok", "tükendi̇"] and gorunur_mu(etiket):
+                                stokta_yok_mu = True
+                                break
 
                     fiyat_gosterim = "Tükendi"
                     stok_durum = "Tükendi"
-                    
-                    # 3. FİYAT BULUCU
+
+                    # 3. FİYAT BULUCU (birden fazla eşleşme varsa en düşüğünü/güncel fiyatı seç —
+                    # indirimli ürünlerde üstü çizili eski fiyat metinde önce geçtiği için yanlış
+                    # fiyat seçilmesini engeller)
                     raw_text = urun.text.replace('\n', ' ')
                     raw_text = re.sub(r'\{.*?\}', '', raw_text)
-                    
+
                     if not stokta_yok_mu:
-                        fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
-                        
-                        if fiyat_eslesme:
-                            fiyat = fiyat_eslesme.group(0).upper().replace('₺', ' TL').strip()
-                            if "TL" not in fiyat: fiyat += " TL"
+                        fiyat_eslesmeler = re.findall(
+                            r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)',
+                            raw_text, re.IGNORECASE
+                        )
+                        gecerli = []
+                        for e in fiyat_eslesmeler:
+                            sayi = metni_sayiya_cevir(e)
+                            if sayi and sayi > 0:
+                                gecerli.append((sayi, e))
+
+                        if gecerli:
+                            gecerli.sort(key=lambda x: x[0])
+                            _, en_uygun_metin = gecerli[0]
+                            fiyat = en_uygun_metin.upper().replace('₺', ' TL').strip()
+                            if "TL" not in fiyat:
+                                fiyat += " TL"
                             fiyat_gosterim = fiyat
                             stok_durum = "Canlı Veri"
                         else:
@@ -140,7 +182,7 @@ def site_tara(ad, ayarlar, q_encoded):
                     # 4. ÇÖP FİLTRESİ
                     if not stokta_yok_mu and stok_durum == "Tükendi":
                         continue
-                        
+
                     if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
                         fiyat_gosterim = "Tükendi"
                         stok_durum = "Tükendi"
@@ -159,8 +201,14 @@ def site_tara(ad, ayarlar, q_encoded):
                     continue
     except Exception as e:
         print(f"[{ad}] HATA: {str(e)}")
-        
+
     return bulunanlar
+
+
+@app.get("/")
+def ana_sayfa():
+    return FileResponse("taslak.html")
+
 
 @app.get("/arama")
 def arama_yap(q: str):
