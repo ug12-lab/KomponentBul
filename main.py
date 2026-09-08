@@ -17,14 +17,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Sadece Kutu Seçicileri (İsim ve fiyatı class'tan değil, akıllı metinden alacağız)
+# SEÇİCİLER (Hem esnek hem güvenli genişlikte)
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .box, .ems-prd, .product-card"
+            "kutu": ".ems-prd, .product-item, .box",
+            "isim": ".ems-prd-name, .product-name",
+            "fiyat": ".ems-prd-price-selling, .product-price, .price"
         }
     },
     "Robotistan": {
@@ -32,7 +34,9 @@ TEDARIKCILER = {
         "base_url": "https://www.robotistan.com",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .product-wrapper, .general-box"
+            "kutu": ".product-item, .product-wrapper, .general-box",
+            "isim": ".product-name a, .product-name",
+            "fiyat": ".product-price, .current-price, .price"
         }
     },
     "Motorobit": {
@@ -40,7 +44,9 @@ TEDARIKCILER = {
         "base_url": "https://www.motorobit.com",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".showcase, .product-item, .col-item"
+            "kutu": ".showcase, .product-item, .col-item",
+            "isim": ".showcase-title a, .product-name",
+            "fiyat": ".showcase-price-new, .product-price, .price"
         }
     },
     "Robolink": {
@@ -48,7 +54,9 @@ TEDARIKCILER = {
         "base_url": "https://www.robolinkmarket.com",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .product-box"
+            "kutu": ".product-item, .product-box",
+            "isim": ".product-title a, .product-name",
+            "fiyat": ".current-price, .product-price, .price"
         }
     }
 }
@@ -81,7 +89,7 @@ def site_tara(ad, ayarlar, q_encoded):
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
             
-            eklenen_isimler = set() # Aynı ürünün alt alta 4 kere çıkmasını (Robotistan hatası) engeller
+            eklenen_isimler = set() # Robotistan klon engelliyici
             sayac = 0
             
             for urun in urunler:
@@ -89,64 +97,80 @@ def site_tara(ad, ayarlar, q_encoded):
                     break
                     
                 try:
-                    kart_metni = urun.text.replace('\n', ' ').strip()
-                    kart_metni_kucuk = kart_metni.lower()
+                    # 1. KART METNİ TEMİZLİĞİ (Robolink Vue kodlarını anında yok et)
+                    kart_metni = urun.text.replace('\n', ' ')
+                    kart_metni_temiz = re.sub(r'\{.*?\}', '', kart_metni).strip()
+                    kart_metni_kucuk = kart_metni_temiz.lower()
                     
-                    # Vue.js kodlarını ({{ P.price... }}) tamamen imha et (Robolink hatasını çözer)
-                    if "{" in kart_metni:
-                        kart_metni = re.sub(r'\{.*?\}', '', kart_metni)
-                        kart_metni_kucuk = kart_metni.lower()
-
-                    # 1. AKILLI FİYAT VE ÇÖP KUTUSU FİLTRESİ
-                    fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', kart_metni, re.IGNORECASE)
-                    
-                    stokta_yok_mu = "tükendi" in kart_metni_kucuk or "stokta yok" in kart_metni_kucuk
-                    
-                    # Eğer kutuda fiyat formatı YOKSA ve Tükendi de YAZMIYORSA, bu bir sol menü/kategoridir (Elektromarketim Hatası). Pas geç!
-                    if not fiyat_eslesme and not stokta_yok_mu:
-                        continue
-                        
-                    # 2. İSİM BULMA (En uzun A etiketindeki yazıyı isim say)
+                    # 2. HİBRİT İSİM BULUCU (Önce sınıf ara, yoksa en uzun A etiketini al)
                     isim = ""
                     link = url
-                    en_uzun_uzunluk = 0
+                    isim_etiketi = urun.select_one(sec["isim"])
                     
-                    for a_etiketi in urun.find_all('a'):
-                        metin = a_etiketi.text.replace("Yeni", "").replace("YENİ", "").strip()
-                        if len(metin) > en_uzun_uzunluk and "{" not in metin:
-                            en_uzun_uzunluk = len(metin)
-                            isim = metin
-                            temp_link = a_etiketi.get('href', '')
-                            if temp_link:
-                                link = temp_link if temp_link.startswith('http') else ayarlar["base_url"] + temp_link
-
-                    # Çöp isimleri veya aynı ürünü tekrar eklemeyi engelle
+                    if isim_etiketi:
+                        isim = isim_etiketi.text.strip()
+                        a_etiketi = isim_etiketi if isim_etiketi.name == 'a' else isim_etiketi.find('a')
+                        if not a_etiketi: a_etiketi = urun.find('a')
+                        if a_etiketi: link = a_etiketi.get('href', url)
+                    else:
+                        en_uzun = 0
+                        for a in urun.find_all('a'):
+                            m = a.text.strip()
+                            if len(m) > en_uzun and "{" not in m:
+                                en_uzun = len(m)
+                                isim = m
+                                link = a.get('href', url)
+                    
+                    # İsim sterilizasyonu
+                    isim = isim.replace("Yeni", "").replace("YENİ", "").strip()
+                    isim = re.sub(r'\s+', ' ', isim) # Fazla boşlukları tek boşluğa düşür
+                    
                     if len(isim) < 5 or isim.upper() in ["SEPETE EKLE", "İNCELE", "DETAY", "STOKTA YOK"]:
+                        continue
+                    if "{" in isim or "}" in isim:
                         continue
                     if isim in eklenen_isimler:
                         continue
-
-                    # 3. FİYATI DÜZENLEME
+                        
+                    if not link.startswith('http'):
+                        link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
+                        
+                    # 3. HİBRİT FİYAT VE STOK BULUCU
                     fiyat_gosterim = "Stokta Yok"
                     stok_durum = "Stokta Yok"
                     
-                    if not stokta_yok_mu:
-                        if fiyat_eslesme:
-                            fiyat_gosterim = fiyat_eslesme.group(0).upper().replace('₺', 'TL')
-                            if "TL" not in fiyat_gosterim:
-                                fiyat_gosterim += " TL"
-                            stok_durum = "Canlı Veri"
-                        else:
-                            # Sadece düz rakam varsa (örn: 24,75)
-                            alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', kart_metni)
-                            if alternatif_sayi:
-                                fiyat_gosterim = f"{alternatif_sayi.group(0)} TL"
-                                stok_durum = "Canlı Veri"
-
-                    # 0 TL gibi saçma değerleri stokta yok yap
-                    if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
+                    if "tükendi" in kart_metni_kucuk or "stokta yok" in kart_metni_kucuk:
                         fiyat_gosterim = "Stokta Yok"
                         stok_durum = "Stokta Yok"
+                    else:
+                        fiyat_etiketi = urun.select_one(sec["fiyat"])
+                        ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
+                        ham_fiyat = re.sub(r'\{.*?\}', '', ham_fiyat).strip()
+                        
+                        fiyat_bulundu = False
+                        
+                        # A. Nokta Atışı: Fiyat etiketinden çek
+                        if ham_fiyat:
+                            f_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', ham_fiyat)
+                            if f_match and "0,00" not in f_match.group(0):
+                                fiyat_gosterim = f_match.group(0) + " TL"
+                                stok_durum = "Canlı Veri"
+                                fiyat_bulundu = True
+                        
+                        # B. Kurtarıcı: Etiket değişmişse genel kart metninden çek
+                        if not fiyat_bulundu:
+                            genel_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', kart_metni_temiz, re.IGNORECASE)
+                            if genel_match:
+                                temiz_r = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', genel_match.group(0))
+                                if temiz_r and "0,00" not in temiz_r.group(0):
+                                    fiyat_gosterim = temiz_r.group(0) + " TL"
+                                    stok_durum = "Canlı Veri"
+                                    fiyat_bulundu = True
+                                    
+                        # C. ÇÖP KUTUSU SİSTEMİ (En Önemli Kısım)
+                        # Tükendi yazmıyorsa ve fiyat da bulunamadıysa bu bir ürün değil sol menüdür! Atla.
+                        if not fiyat_bulundu:
+                            continue
 
                     eklenen_isimler.add(isim)
                     bulunanlar.append({
