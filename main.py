@@ -100,50 +100,43 @@ def site_tara(ad, ayarlar, q_encoded):
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
-                    # 2. HASSAS STOK KONTROLÜ (Görünmez yazılara aldanmaz)
-                    stokta_yok_mu = False
-                    
-                    # Sadece resmi tükenme sınıfları varsa
-                    if urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
-                        stokta_yok_mu = True
-                        
-                    # Sadece buton ve A etiketlerindeki net yazılara bak
-                    if not stokta_yok_mu:
-                        for buton in urun.find_all(['button', 'a']):
-                            if buton.text:
-                                b_metin = buton.text.lower().strip()
-                                if b_metin in ["tükendi", "stokta yok", "tükendi̇", "stokta kalmadı"]:
-                                    stokta_yok_mu = True
-                                    break
-
-                    fiyat_gosterim = "Tükendi"
-                    stok_durum = "Tükendi"
-                    
-                    # 3. FİYAT BULUCU
+                    # 2. FİYAT BULUCU
                     raw_text = urun.text.replace('\n', ' ')
                     raw_text = re.sub(r'\{.*?\}', '', raw_text)
+                    kart_kucuk = raw_text.lower()
                     
-                    if not stokta_yok_mu:
-                        fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
-                        
-                        if fiyat_eslesme:
-                            fiyat = fiyat_eslesme.group(0).upper().replace('₺', ' TL').strip()
-                            if "TL" not in fiyat: fiyat += " TL"
-                            fiyat_gosterim = fiyat
-                            stok_durum = "Canlı Veri"
-                        else:
-                            alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', raw_text)
-                            if alternatif_sayi:
-                                fiyat_gosterim = alternatif_sayi.group(0) + " TL"
-                                stok_durum = "Canlı Veri"
+                    fiyat_gosterim = ""
+                    fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
+                    
+                    if fiyat_eslesme:
+                        fiyat = fiyat_eslesme.group(0).upper().replace('₺', ' TL').strip()
+                        if "TL" not in fiyat: fiyat += " TL"
+                        fiyat_gosterim = fiyat
+                    else:
+                        alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', raw_text)
+                        if alternatif_sayi:
+                            fiyat_gosterim = alternatif_sayi.group(0) + " TL"
+
+                    # 3. YENİLMEZ STOK KONTROLÜ (Doğruluk Serumu İçerir)
+                    stok_durum = "Canlı Veri"
+                    
+                    if not fiyat_gosterim or "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
+                        stok_durum = "Tükendi"
+                        fiyat_gosterim = "Tükendi"
+                    else:
+                        if urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
+                            stok_durum = "Tükendi"
+                            fiyat_gosterim = "Tükendi"
+                        elif "tükendi" in kart_kucuk or "stokta yok" in kart_kucuk:
+                            # Metinde Tükendi/Stokta Yok yazıyor ama gizli kodlar veya "Stokta yoksa haber ver" olabilir.
+                            # Doğruluk Serumu: Eğer o kartın içinde "sepete ekle" kelimesi varsa, kesin stoktadır!
+                            if "sepete ekle" not in kart_kucuk:
+                                stok_durum = "Tükendi"
+                                fiyat_gosterim = "Tükendi"
 
                     # 4. ÇÖP FİLTRESİ
-                    if not stokta_yok_mu and stok_durum == "Tükendi":
+                    if stok_durum == "Tükendi" and "tükendi" not in kart_kucuk and "stokta yok" not in kart_kucuk and not urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
                         continue
-                        
-                    if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
-                        fiyat_gosterim = "Tükendi"
-                        stok_durum = "Tükendi"
 
                     eklenen_isimler.add(isim)
                     bulunanlar.append({
