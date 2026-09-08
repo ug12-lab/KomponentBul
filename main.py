@@ -17,7 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Genişletilmiş ve güvenli kutu seçicileri
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
@@ -50,7 +49,6 @@ def ana_sayfa():
     return FileResponse("taslak.html")
 
 def fiyat_temizle(fiyat_str):
-    # Sıralama yaparken Tükendi olanları en alta atar
     if not fiyat_str or "Tükendi" in fiyat_str or "Stokta" in fiyat_str:
         return 999999.0
     temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',' or c == '.')
@@ -102,27 +100,28 @@ def site_tara(ad, ayarlar, q_encoded):
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
-                    # 2. HASSAS STOK KONTROLÜ (Sadece gerçekten tükenenleri bulur)
+                    # 2. HASSAS STOK KONTROLÜ (Görünmez yazılara aldanmaz)
                     stokta_yok_mu = False
                     
-                    # A. HTML Sınıfı ile Kesin Kontrol
+                    # Sadece resmi tükenme sınıfları varsa
                     if urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
                         stokta_yok_mu = True
                         
-                    # B. Rozet/Buton Metni ile Kontrol (Gizli kodlara takılmamak için sadece küçük etiketlere bakar)
+                    # Sadece buton ve A etiketlerindeki net yazılara bak
                     if not stokta_yok_mu:
-                        for etiket in urun.find_all(['div', 'span', 'a', 'p', 'b', 'button']):
-                            metin = etiket.text.strip().lower()
-                            if metin in ["tükendi", "stokta yok", "tükendi̇"]:
-                                stokta_yok_mu = True
-                                break
+                        for buton in urun.find_all(['button', 'a']):
+                            if buton.text:
+                                b_metin = buton.text.lower().strip()
+                                if b_metin in ["tükendi", "stokta yok", "tükendi̇", "stokta kalmadı"]:
+                                    stokta_yok_mu = True
+                                    break
 
                     fiyat_gosterim = "Tükendi"
                     stok_durum = "Tükendi"
                     
                     # 3. FİYAT BULUCU
                     raw_text = urun.text.replace('\n', ' ')
-                    raw_text = re.sub(r'\{.*?\}', '', raw_text) # Kırık kodları temizle
+                    raw_text = re.sub(r'\{.*?\}', '', raw_text)
                     
                     if not stokta_yok_mu:
                         fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
@@ -139,11 +138,9 @@ def site_tara(ad, ayarlar, q_encoded):
                                 stok_durum = "Canlı Veri"
 
                     # 4. ÇÖP FİLTRESİ
-                    # Eğer Tükendi DEĞİLSE ve Fiyat da BULUNAMADIYSA bu bir üründür olamaz (Sol menüdür, çöpe at)
                     if not stokta_yok_mu and stok_durum == "Tükendi":
                         continue
                         
-                    # Sıfır fiyatlıları Tükendi yap
                     if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
                         fiyat_gosterim = "Tükendi"
                         stok_durum = "Tükendi"
