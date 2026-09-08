@@ -37,7 +37,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.direnc.net/arama?q={}",
         "base_url": "https://www.direnc.net",
         "kategori": "Perakende",
-        "ozel_header": {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'},
+        "ozel_header": None, # 403 hatasını aşmak için kimlik yönetimini cloudscraper'a devrettik
         "seciciler": {
             "kutu": ".product-box, .product-item",
             "isim": ".product-name, .title",
@@ -86,7 +86,7 @@ TEDARIKCILER = {
         }
     },
     "Ozdisan": {
-        "url_sablonu": "https://www.ozdisan.com/Product/Search?searchtext={}",
+        "url_sablonu": "https://www.ozdisan.com/arama?q={}", # 404 veren link yapısı düzeltildi
         "base_url": "https://www.ozdisan.com",
         "kategori": "Toptan",
         "ozel_header": None,
@@ -119,17 +119,15 @@ def site_tara(ad, ayarlar, q_encoded):
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
     
-    # Çakışmayı önlemek için her siteye özel taze bir scraper oluşturuluyor
     bireysel_scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
     
-    # Eğer siteye özel bir header varsa onu, yoksa standart PC kimliğini kullan
     headers = ayarlar.get("ozel_header") or {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     
     try:
         res = bireysel_scraper.get(url, headers=headers, timeout=12)
-        print(f"{ad} Status: {res.status_code}") # Hata ayıklama için Render loglarına yaz
+        print(f"{ad} Status: {res.status_code}") 
         
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
@@ -174,7 +172,6 @@ def arama_yap(q: str):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
 
-    # Maksimum 6 paralel işlem ile arama
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
