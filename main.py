@@ -5,6 +5,7 @@ import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
+import re
 
 app = FastAPI()
 
@@ -16,9 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
-# ÇEKİRDEK: KANITLANMIŞ 4 PERAKENDE SİTESİ
-# ==========================================
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
@@ -27,8 +25,7 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".product-item, .box",
             "isim": ".product-name, .product-title",
-            "fiyat": ".product-price",
-            "stok_class": ".tanitim-stock-alert"
+            "fiyat": ".product-price, .price, .current-price"
         }
     },
     "Robotistan": {
@@ -38,8 +35,7 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".product-item, .product-wrapper",
             "isim": ".product-name a, .product-name",
-            "fiyat": ".product-price, .current-price",
-            "stok_class": ".out-of-stock, .stock-out"
+            "fiyat": ".product-price, .current-price, .price"
         }
     },
     "Motorobit": {
@@ -49,8 +45,7 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".showcase, .product-item",
             "isim": ".showcase-title a, .product-name",
-            "fiyat": ".showcase-price-new, .product-price",
-            "stok_class": ".out-of-stock"
+            "fiyat": ".showcase-price-new, .product-price, .price"
         }
     },
     "Robolink": {
@@ -60,8 +55,7 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".product-item, .product-box",
             "isim": ".product-title a, .product-name",
-            "fiyat": ".current-price, .product-price",
-            "stok_class": ".out-of-stock"
+            "fiyat": ".current-price, .product-price, .price, span.price"
         }
     }
 }
@@ -99,10 +93,8 @@ def site_tara(ad, ayarlar, q_encoded):
                     isim_etiketi = urun.select_one(sec["isim"])
                     link_etiketi = urun.select_one('a')
                     fiyat_etiketi = urun.select_one(sec["fiyat"])
-                    stok_etiketi = urun.select_one(sec["stok_class"]) if sec.get("stok_class") else None
                     
                     if isim_etiketi and link_etiketi:
-                        # Robotistan'daki "Yeni" rozeti sorununu çözdük
                         isim = isim_etiketi.text.replace("Yeni", "").replace("YENİ", "").strip()
                         if len(isim) < 4:
                             continue
@@ -111,10 +103,13 @@ def site_tara(ad, ayarlar, q_encoded):
                         if link and not link.startswith('http'):
                             link = ayarlar["base_url"] + link
                             
+                        # Fiyat metnini çek ve içinde rakam ara
                         ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
+                        rakam_varmi = re.search(r'\d', ham_fiyat)
                         
-                        # Net stok kontrolü (Gizli "tükendi" tuzağı iptal edildi)
-                        if stok_etiketi or not ham_fiyat or "0,00" in ham_fiyat:
+                        # Kartın genel metninde açıkça "tükendi" yazmıyorsa ve fiyat rakam içeriyorsa stoku var kabul et
+                        kart_metni = urun.text.lower()
+                        if "tükendi" in kart_metni or not rak_varmi := bool(rakam_varmi):
                             fiyat_gosterim = "Stokta Yok"
                             stok_durum = "Stokta Yok"
                         else:
@@ -141,7 +136,6 @@ def arama_yap(q: str):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
 
-    # 4 Site için maksimum paralellik
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
