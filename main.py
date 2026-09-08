@@ -5,6 +5,7 @@ import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
+import re
 
 app = FastAPI()
 
@@ -16,46 +17,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# SADECE ÇALIŞAN 4 SİTE
+# Kutu seçicilerini genişlettik, isim ve fiyat bulma işini Regex'e devrettik
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .box",
-            "isim": ".product-name, .product-title",
-            "fiyat": ".product-price, .price",
-            "stok": ".tanitim-stock-alert"
+            "kutu": ".product-item, .box, .ems-prd, div[class*='product']"
         }
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .product-wrapper",
-            "isim": ".product-name a, .product-name",
-            "fiyat": ".product-price, .current-price, .price",
-            "stok": ".out-of-stock, .stock-out"
+            "kutu": ".product-item, .product-wrapper, div[class*='product']"
         }
     },
     "Motorobit": {
         "url_sablonu": "https://www.motorobit.com/arama?q={}",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".showcase, .product-item",
-            "isim": ".showcase-title a, .product-name",
-            "fiyat": ".showcase-price-new, .product-price, .price",
-            "stok": ".out-of-stock"
+            "kutu": ".showcase, .product-item, .col-md-3, div[class*='product']"
         }
     },
     "Robolink": {
         "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .product-box",
-            "isim": ".product-title a, .product-name",
-            "fiyat": ".current-price, .product-price, .price",
-            "stok": ".out-of-stock"
+            "kutu": ".product-item, .product-box, div[class*='product']"
         }
     }
 }
@@ -65,7 +54,7 @@ def ana_sayfa():
     return FileResponse("taslak.html")
 
 def fiyat_temizle(fiyat_str):
-    if not fiyat_str or "Hata" in fiyat_str or "BULUNAMADI" in fiyat_str:
+    if not fiyat_str or "Stokta Yok" in fiyat_str or "HATA" in fiyat_str:
         return 999999.0
     temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',' or c == '.')
     temiz = temiz.replace('.', '').replace(',', '.')
@@ -88,61 +77,59 @@ def site_tara(ad, ayarlar, q_encoded):
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
             
-            # Eğer sitede ürün kutusu hiç bulunamazsa bunu arayüze bas
-            if not urunler:
-                bulunanlar.append({
-                    "Tedarikci": ad,
-                    "Kategori": "HATA",
-                    "Urun": "Sayfa yüklendi ama HTML ürün kutusu (kutu seçici) bulunamadı!",
-                    "Fiyat": "HATA",
-                    "Durum": "Kutu Yok",
-                    "Link": url
-                })
-                return bulunanlar
-            
             for urun in urunler[:5]:
-                isim_etiketi = urun.select_one(sec["isim"])
-                fiyat_etiketi = urun.select_one(sec["fiyat"])
-                stok_etiketi = urun.select_one(sec["stok"]) if sec.get("stok") else None
-                
-                # HTML'den çektiği ham metinleri olduğu gibi alıyoruz
-                isim = isim_etiketi.text.replace("Yeni", "").strip() if isim_etiketi else "İSİM_BULUNAMADI"
-                ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else "FİYAT_BULUNAMADI"
-                
-                stok_durum = "Veri Çekildi"
-                if stok_etiketi:
-                    stok_durum = "STOK ETİKETİ VAR"
-                elif "FİYAT_BULUNAMADI" in ham_fiyat:
-                    stok_durum = "Fiyat Sınıfı Yanlış"
+                try:
+                    # 1. AKILLI İSİM BULUCU: Kutu içindeki en uzun metne sahip linki ürün adı kabul et
+                    isim = ""
+                    link = url # Varsayılan olarak arama sayfasına gitsin
+                    en_uzun_metin_uzunlugu = 0
                     
-                bulunanlar.append({
-                    "Tedarikci": ad,
-                    "Kategori": ayarlar["kategori"],
-                    "Urun": isim,
-                    "Fiyat": ham_fiyat, # Hiçbir filtreleme olmadan direkt fiyatı ekrana basıyoruz
-                    "Durum": stok_durum,
-                    "Link": url
-                })
-        else:
-            # 403 veya 404 yenirse bunu doğrudan listeye ekle
-            bulunanlar.append({
-                "Tedarikci": ad,
-                "Kategori": "HATA",
-                "Urun": f"HTTP {res.status_code} - Site engelledi",
-                "Fiyat": "HATA",
-                "Durum": "Engellendi",
-                "Link": url
-            })
+                    for a_etiketi in urun.find_all('a'):
+                        metin = a_etiketi.text.replace("Yeni", "").replace("YENİ", "").replace("Sepete Ekle", "").strip()
+                        if len(metin) > en_uzun_metin_uzunlugu:
+                            en_uzun_metin_uzunlugu = len(metin)
+                            isim = metin
+                            temp_link = a_etiketi.get('href', '')
+                            if temp_link:
+                                link = temp_link if temp_link.startswith('http') else "https://www." + ad.lower() + (".com" if ad != "Robolink" else "market.com") + temp_link
+                    
+                    if len(isim) < 4:
+                        continue # Eğer anlamlı bir isim bulamadıysa bu kutuyu atla
+
+                    # 2. AKILLI FİYAT BULUCU: Kutunun içindeki tüm metni tarayıp para birimi formatını yakala
+                    kart_metni = urun.text.replace('\n', ' ').strip()
+                    fiyat_gosterim = "Stokta Yok"
+                    stok_durum = "Stokta Yok"
+                    
+                    kart_metni_kucuk = kart_metni.lower()
+                    if "tükendi" not in kart_metni_kucuk and "stokta yok" not in kart_metni_kucuk:
+                        # Örnek: 1.250,00 TL, 15,50 TL, 45 TL veya ₺ simgeli olanları bul
+                        fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', kart_metni, re.IGNORECASE)
+                        
+                        if fiyat_eslesme:
+                            fiyat_gosterim = fiyat_eslesme.group(0).upper().replace('₺', 'TL')
+                            if "TL" not in fiyat_gosterim:
+                                fiyat_gosterim += " TL"
+                            stok_durum = "Canlı Veri"
+                        else:
+                            # Sadece rakam bulmayı dene (TL yazmıyorsa)
+                            alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', kart_metni)
+                            if alternatif_sayi:
+                                fiyat_gosterim = f"{alternatif_sayi.group(0)} TL"
+                                stok_durum = "Canlı Veri"
+
+                    bulunanlar.append({
+                        "Tedarikci": ad,
+                        "Kategori": ayarlar["kategori"],
+                        "Urun": isim,
+                        "Fiyat": fiyat_gosterim,
+                        "Durum": stok_durum,
+                        "Link": link
+                    })
+                except Exception:
+                    continue
     except Exception as e:
-        # Kod çökerse hatayı arayüze yazdır
-        bulunanlar.append({
-            "Tedarikci": ad,
-            "Kategori": "HATA",
-            "Urun": f"Sistem Çöktü: {str(e)}",
-            "Fiyat": "HATA",
-            "Durum": "Hata",
-            "Link": url
-        })
+        print(f"[{ad}] Hata: {str(e)}")
         
     return bulunanlar
 
