@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
 import re
+from curl_cffi import requests as tls_requests
 
 app = FastAPI()
 
@@ -17,6 +17,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==========================================
+# ÇALIŞAN 4 SİTE - KESİN HTML SEÇİCİLERİ
+# ==========================================
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
@@ -25,7 +28,8 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".product-item, .box",
             "isim": ".product-name, .product-title",
-            "fiyat": ".product-price, .price, .current-price"
+            "fiyat": ".product-price, .price",
+            "stok": ".tanitim-stock-alert"
         }
     },
     "Robotistan": {
@@ -35,7 +39,8 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".product-item, .product-wrapper",
             "isim": ".product-name a, .product-name",
-            "fiyat": ".product-price, .current-price, .price"
+            "fiyat": ".product-price, .current-price, .price",
+            "stok": ".out-of-stock, .stock-out"
         }
     },
     "Motorobit": {
@@ -45,7 +50,8 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".showcase, .product-item",
             "isim": ".showcase-title a, .product-name",
-            "fiyat": ".showcase-price-new, .product-price, .price"
+            "fiyat": ".showcase-price-new, .product-price, .price",
+            "stok": ".out-of-stock"
         }
     },
     "Robolink": {
@@ -55,7 +61,8 @@ TEDARIKCILER = {
         "seciciler": {
             "kutu": ".product-item, .product-box",
             "isim": ".product-title a, .product-name",
-            "fiyat": ".current-price, .product-price, .price, span.price"
+            "fiyat": ".current-price, .product-price, .price",
+            "stok": ".out-of-stock"
         }
     }
 }
@@ -79,10 +86,10 @@ def site_tara(ad, ayarlar, q_encoded):
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
     
-    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
-    
     try:
-        res = scraper.get(url, timeout=15)
+        # Cloudflare ve bot korumalarını "chrome110" maskesiyle aşıyoruz
+        res = tls_requests.get(url, impersonate="chrome110", timeout=15)
+        print(f"[{ad}] HTTP Durum: {res.status_code}") # Loglarda artık ne döndüğünü kesin göreceğiz
         
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
@@ -92,40 +99,50 @@ def site_tara(ad, ayarlar, q_encoded):
                 try:
                     isim_etiketi = urun.select_one(sec["isim"])
                     link_etiketi = urun.select_one('a')
-                    fiyat_etiketi = urun.select_one(sec["fiyat"])
                     
-                    if isim_etiketi and link_etiketi:
-                        isim = isim_etiketi.text.replace("Yeni", "").replace("YENİ", "").strip()
-                        if len(isim) < 4:
-                            continue
-                            
-                        link = link_etiketi.get('href')
-                        if link and not link.startswith('http'):
-                            link = ayarlar["base_url"] + link
-                            
-                        ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
-                        rakam_varmi = bool(re.search(r'\d', ham_fiyat))
+                    if not isim_etiketi or not link_etiketi:
+                        continue
                         
-                        kart_metni = urun.text.lower()
-                        if "tükendi" in kart_metni or not rakam_varmi:
-                            fiyat_gosterim = "Stokta Yok"
-                            stok_durum = "Stokta Yok"
-                        else:
-                            fiyat_gosterim = f"{ham_fiyat}" if "TL" in ham_fiyat else f"{ham_fiyat} TL"
-                            stok_durum = "Canlı Veri"
+                    isim = isim_etiketi.text.replace("Yeni", "").replace("YENİ", "").strip()
+                    if len(isim) < 3:
+                        continue
                         
-                        bulunanlar.append({
-                            "Tedarikci": ad,
-                            "Kategori": ayarlar["kategori"],
-                            "Urun": isim,
-                            "Fiyat": fiyat_gosterim,
-                            "Durum": stok_durum,
-                            "Link": link
-                        })
-                except Exception:
+                    link = link_etiketi.get('href')
+                    if link and not link.startswith('http'):
+                        link = ayarlar["base_url"] + link
+                        
+                    # --- FİYAT VE STOK KONTROLÜ (YENİ MANTIK) ---
+                    fiyat_etiketi = urun.select_one(sec["fiyat"])
+                    ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
+                    
+                    stok_yok_mu = False
+                    if sec.get("stok"):
+                        stok_etiketi = urun.select_one(sec["stok"])
+                        if stok_etiketi:
+                            stok_yok_mu = True
+                            
+                    # Sadece rakamları yakala (150,00 veya 1.500)
+                    fiyat_eslesme = re.search(r'\d+[.,\d]*', ham_fiyat)
+                    
+                    if stok_yok_mu or not fiyat_eslesme or "0,00" in ham_fiyat:
+                        fiyat_gosterim = "Stokta Yok"
+                        stok_durum = "Stokta Yok"
+                    else:
+                        fiyat_gosterim = fiyat_eslesme.group(0) + " TL"
+                        stok_durum = "Canlı Veri"
+                    
+                    bulunanlar.append({
+                        "Tedarikci": ad,
+                        "Kategori": ayarlar["kategori"],
+                        "Urun": isim,
+                        "Fiyat": fiyat_gosterim,
+                        "Durum": stok_durum,
+                        "Link": link
+                    })
+                except Exception as inner_e:
                     continue
     except Exception as e:
-        print(f"[{ad}] Hata: {str(e)}")
+        print(f"[{ad}] Bağlantı Hatası: {str(e)}")
         
     return bulunanlar
 
@@ -140,7 +157,7 @@ def arama_yap(q: str):
             try:
                 sonuclar.extend(gelecek.result())
             except Exception as e:
-                print("Thread hatası:", e)
+                print("Eşzamanlı işlem hatası:", e)
 
     sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
     return {"sonuclar": sonuclar}
