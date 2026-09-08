@@ -210,6 +210,11 @@ def ana_sayfa():
     return FileResponse("taslak.html")
 
 
+@app.get("/logo.png")
+def logo():
+    return FileResponse("logo.png")
+
+
 @app.get("/arama")
 def arama_yap(q: str):
     sonuclar = []
