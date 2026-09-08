@@ -17,12 +17,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Genişletilmiş ve güvenli kutu seçicileri
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".ems-prd, div[class*='product-item']"} 
+        "seciciler": {"kutu": ".ems-prd, .product-item, div[class*='product']"} 
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
@@ -49,7 +50,8 @@ def ana_sayfa():
     return FileResponse("taslak.html")
 
 def fiyat_temizle(fiyat_str):
-    if not fiyat_str or "Stokta Yok" in fiyat_str:
+    # Sıralama yaparken Tükendi olanları en alta atar
+    if not fiyat_str or "Tükendi" in fiyat_str or "Stokta" in fiyat_str:
         return 999999.0
     temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',' or c == '.')
     temiz = temiz.replace('.', '').replace(',', '.')
@@ -71,15 +73,17 @@ def site_tara(ad, ayarlar, q_encoded):
             urunler = soup.select(sec["kutu"])
             
             eklenen_isimler = set()
+            sayac = 0
             
             for urun in urunler:
-                if len(bulunanlar) >= 5:
+                if sayac >= 5:
                     break
                     
                 try:
                     isim = ""
                     link = url
                     
+                    # 1. İSİM BULUCU
                     for a in urun.find_all('a'):
                         text = a.text.replace("Yeni", "").replace("YENİ", "").strip()
                         text = re.sub(r'\{.*?\}', '', text)
@@ -98,33 +102,51 @@ def site_tara(ad, ayarlar, q_encoded):
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
+                    # 2. HASSAS STOK KONTROLÜ (Sadece gerçekten tükenenleri bulur)
+                    stokta_yok_mu = False
+                    
+                    # A. HTML Sınıfı ile Kesin Kontrol
+                    if urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
+                        stokta_yok_mu = True
+                        
+                    # B. Rozet/Buton Metni ile Kontrol (Gizli kodlara takılmamak için sadece küçük etiketlere bakar)
+                    if not stokta_yok_mu:
+                        for etiket in urun.find_all(['div', 'span', 'a', 'p', 'b', 'button']):
+                            metin = etiket.text.strip().lower()
+                            if metin in ["tükendi", "stokta yok", "tükendi̇"]:
+                                stokta_yok_mu = True
+                                break
+
+                    fiyat_gosterim = "Tükendi"
+                    stok_durum = "Tükendi"
+                    
+                    # 3. FİYAT BULUCU
                     raw_text = urun.text.replace('\n', ' ')
-                    raw_text = re.sub(r'\{.*?\}', '', raw_text)
-                    kart_kucuk = raw_text.lower()
+                    raw_text = re.sub(r'\{.*?\}', '', raw_text) # Kırık kodları temizle
                     
-                    fiyat_gosterim = "Stokta Yok"
-                    stok_durum = "Stokta Yok"
-                    
-                    if "tükendi" not in kart_kucuk and "stokta yok" not in kart_kucuk:
+                    if not stokta_yok_mu:
                         fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
                         
                         if fiyat_eslesme:
-                            fiyat_gosterim = fiyat_eslesme.group(0).upper().replace('₺', ' TL').strip()
-                            if "TL" not in fiyat_gosterim: 
-                                fiyat_gosterim += " TL"
+                            fiyat = fiyat_eslesme.group(0).upper().replace('₺', ' TL').strip()
+                            if "TL" not in fiyat: fiyat += " TL"
+                            fiyat_gosterim = fiyat
                             stok_durum = "Canlı Veri"
                         else:
                             alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', raw_text)
-                            if alternatif_sayi and "0,00" not in alternatif_sayi.group(0):
+                            if alternatif_sayi:
                                 fiyat_gosterim = alternatif_sayi.group(0) + " TL"
                                 stok_durum = "Canlı Veri"
 
-                    if stok_durum == "Stokta Yok" and "tükendi" not in kart_kucuk and "stokta yok" not in kart_kucuk:
+                    # 4. ÇÖP FİLTRESİ
+                    # Eğer Tükendi DEĞİLSE ve Fiyat da BULUNAMADIYSA bu bir üründür olamaz (Sol menüdür, çöpe at)
+                    if not stokta_yok_mu and stok_durum == "Tükendi":
                         continue
                         
+                    # Sıfır fiyatlıları Tükendi yap
                     if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
-                        fiyat_gosterim = "Stokta Yok"
-                        stok_durum = "Stokta Yok"
+                        fiyat_gosterim = "Tükendi"
+                        stok_durum = "Tükendi"
 
                     eklenen_isimler.add(isim)
                     bulunanlar.append({
@@ -135,6 +157,7 @@ def site_tara(ad, ayarlar, q_encoded):
                         "Durum": stok_durum,
                         "Link": link
                     })
+                    sayac += 1
                 except Exception:
                     continue
     except Exception as e:
