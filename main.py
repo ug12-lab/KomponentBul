@@ -22,25 +22,41 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".ems-prd, .product-item, div[class*='product']"} 
+        "seciciler": {
+            "kutu": ".ems-prd, .product-item, div[class*='product']",
+            "isim": ".ems-prd-name, .product-name",
+            "fiyat": ".ems-prd-price-selling, .product-price, .price"
+        } 
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
         "base_url": "https://www.robotistan.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-item, .product-wrapper"}
+        "seciciler": {
+            "kutu": ".product-item, .product-wrapper",
+            "isim": ".product-name a, .product-name",
+            "fiyat": ".product-price, .current-price, .price"
+        }
     },
     "Motorobit": {
         "url_sablonu": "https://www.motorobit.com/arama?q={}",
         "base_url": "https://www.motorobit.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".showcase, div[class*='product'], li[class*='product']"} 
+        "seciciler": {
+            "kutu": ".showcase, div[class*='product'], li[class*='product']",
+            "isim": ".showcase-title a, .product-name",
+            "fiyat": ".showcase-price-new, .product-price, .price"
+        } 
     },
     "Robolink": {
         "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
         "base_url": "https://www.robolinkmarket.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-item, .product-box"}
+        "seciciler": {
+            "kutu": ".product-item, .product-box",
+            "isim": ".product-title a, .product-name",
+            "fiyat": ".product-price, .current-price, .price"
+        }
     }
 }
 
@@ -78,10 +94,10 @@ def site_tara(ad, ayarlar, q_encoded):
                     break
                     
                 try:
+                    # 1. İSİM BULUCU
                     isim = ""
                     link = url
                     
-                    # 1. İSİM BULUCU
                     for a in urun.find_all('a'):
                         text = a.text.replace("Yeni", "").replace("YENİ", "").strip()
                         text = re.sub(r'\{.*?\}', '', text)
@@ -93,57 +109,58 @@ def site_tara(ad, ayarlar, q_encoded):
                                 link = temp_link
                                 
                     isim = re.sub(r'\s+', ' ', isim).strip()
-                    
                     if len(isim) < 5 or isim in eklenen_isimler:
                         continue
                         
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
-                    # 2. HASSAS STOK KONTROLÜ (Görünmez yazılara aldanmaz)
-                    stokta_yok_mu = False
+                    # 2. HASSAS VE KESİN STOK KONTROLÜ (Girdiğin outerHTML'e göre tasarlandı)
+                    stok_yok_mu = False
                     
-                    # Sadece resmi tükenme sınıfları varsa
-                    if urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock'):
-                        stokta_yok_mu = True
-                        
-                    # Sadece buton ve A etiketlerindeki net yazılara bak
-                    if not stokta_yok_mu:
-                        for buton in urun.find_all(['button', 'a']):
-                            if buton.text:
-                                b_metin = buton.text.lower().strip()
-                                if b_metin in ["tükendi", "stokta yok", "tükendi̇", "stokta kalmadı"]:
-                                    stokta_yok_mu = True
-                                    break
+                    # A. Robolink tarzı gizli stok inputunu kontrol et (value="0" ise kesin tükenmiştir)
+                    stok_input = urun.select_one('input[id*="stock-status"], input[name*="stock"]')
+                    if stok_input:
+                        val = stok_input.get('value', '1')
+                        if val == '0':
+                            stok_yok_mu = True
+                    
+                    # B. Tükendi alanı d-none (görünmez) değilse gerçekten tükenmiştir
+                    tukendi_div = urun.select_one('.out-stock-available, .out-of-stock, .tukendi')
+                    if tukendi_div:
+                        siniflar = tukendi_div.get('class', [])
+                        if 'd-none' not in siniflar:
+                            stok_yok_mu = True
 
                     fiyat_gosterim = "Tükendi"
                     stok_durum = "Tükendi"
                     
                     # 3. FİYAT BULUCU
-                    raw_text = urun.text.replace('\n', ' ')
-                    raw_text = re.sub(r'\{.*?\}', '', raw_text)
-                    
-                    if not stokta_yok_mu:
-                        fiyat_eslesme = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
+                    if not stok_yok_mu:
+                        fiyat_etiketi = urun.select_one(sec["fiyat"])
+                        if fiyat_etiketi:
+                            fiyat_metni = fiyat_etiketi.text.replace('\n', ' ').strip()
+                            f_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', fiyat_metni)
+                            if f_match:
+                                temiz_fiyat = f_match.group(0)
+                                if "0,00" not in temiz_fiyat and "0.00" not in temiz_fiyat:
+                                    fiyat_gosterim = f"{temiz_fiyat} TL"
+                                    stok_durum = "Canlı Veri"
                         
-                        if fiyat_eslesme:
-                            fiyat = fiyat_eslesme.group(0).upper().replace('₺', ' TL').strip()
-                            if "TL" not in fiyat: fiyat += " TL"
-                            fiyat_gosterim = fiyat
-                            stok_durum = "Canlı Veri"
-                        else:
-                            alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', raw_text)
-                            if alternatif_sayi:
-                                fiyat_gosterim = alternatif_sayi.group(0) + " TL"
-                                stok_durum = "Canlı Veri"
+                        # Alternatif olarak genel metinden yakala
+                        if stok_durum == "Tükendi":
+                            raw_text = urun.text.replace('\n', ' ')
+                            raw_text = re.sub(r'\{.*?\}', '', raw_text)
+                            genel_fiyat = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', raw_text, re.IGNORECASE)
+                            if genel_fiyat:
+                                f_temiz = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', genel_fiyat.group(0))
+                                if f_temiz and "0,00" not in f_temiz.group(0):
+                                    fiyat_gosterim = f"{f_temiz.group(0)} TL"
+                                    stok_durum = "Canlı Veri"
 
                     # 4. ÇÖP FİLTRESİ
-                    if not stokta_yok_mu and stok_durum == "Tükendi":
+                    if not stok_yok_mu and stok_durum == "Tükendi":
                         continue
-                        
-                    if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
-                        fiyat_gosterim = "Tükendi"
-                        stok_durum = "Tükendi"
 
                     eklenen_isimler.add(isim)
                     bulunanlar.append({
