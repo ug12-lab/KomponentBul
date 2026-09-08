@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
-import re
-from curl_cffi import requests as tls_requests
 
 app = FastAPI()
 
@@ -18,7 +17,7 @@ app.add_middleware(
 )
 
 # ==========================================
-# NOKTA ATIŞI SEÇİCİLER VE STOK ETİKETLERİ
+# ÇEKİRDEK: KANITLANMIŞ 4 PERAKENDE SİTESİ
 # ==========================================
 TEDARIKCILER = {
     "Elektromarketim": {
@@ -26,21 +25,10 @@ TEDARIKCILER = {
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
         "seciciler": {
-            "kutu": ".product-item, .fl.col-12, li.col-3, .box",
+            "kutu": ".product-item, .box",
             "isim": ".product-name, .product-title",
-            "fiyat": ".product-price, .price",
+            "fiyat": ".product-price",
             "stok_class": ".tanitim-stock-alert"
-        }
-    },
-    "Direnc.net": { 
-        "url_sablonu": "https://www.direnc.net/arama?q={}",
-        "base_url": "https://www.direnc.net",
-        "kategori": "Perakende",
-        "seciciler": {
-            "kutu": ".product-box, .product-item",
-            "isim": ".product-name a, .title",
-            "fiyat": ".product-price, .current-price",
-            "stok_class": ".out-of-stock"
         }
     },
     "Robotistan": {
@@ -49,7 +37,7 @@ TEDARIKCILER = {
         "kategori": "Perakende",
         "seciciler": {
             "kutu": ".product-item, .product-wrapper",
-            "isim": ".product-name a, .product-name", # Doğrudan link metnini al (Yeni rozetini es geç)
+            "isim": ".product-name a, .product-name",
             "fiyat": ".product-price, .current-price",
             "stok_class": ".out-of-stock, .stock-out"
         }
@@ -75,17 +63,6 @@ TEDARIKCILER = {
             "fiyat": ".current-price, .product-price",
             "stok_class": ".out-of-stock"
         }
-    },
-    "Ozdisan": { 
-        "url_sablonu": "https://www.ozdisan.com/Search?Word={}",
-        "base_url": "https://www.ozdisan.com",
-        "kategori": "Toptan",
-        "seciciler": {
-            "kutu": ".product-item, .product-card, .list-item",
-            "isim": ".product-name, .product-title",
-            "fiyat": ".price, .wholesale-price",
-            "stok_class": ".no-stock"
-        }
     }
 }
 
@@ -96,7 +73,7 @@ def ana_sayfa():
 def fiyat_temizle(fiyat_str):
     if "Stokta Yok" in fiyat_str or not fiyat_str:
         return 999999.0
-    temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == '.' or c == ',')
+    temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',' or c == '.')
     temiz = temiz.replace('.', '').replace(',', '.')
     try:
         return float(temiz)
@@ -108,9 +85,10 @@ def site_tara(ad, ayarlar, q_encoded):
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
     
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+    
     try:
-        res = tls_requests.get(url, impersonate="chrome110", timeout=20) # Siteler geç yanıt veriyorsa diye süreyi 20 saniyeye çıkardık
-        print(f"[{ad}] HTTP Durum: {res.status_code} | Link: {url}")
+        res = scraper.get(url, timeout=15)
         
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
@@ -124,9 +102,9 @@ def site_tara(ad, ayarlar, q_encoded):
                     stok_etiketi = urun.select_one(sec["stok_class"]) if sec.get("stok_class") else None
                     
                     if isim_etiketi and link_etiketi:
-                        # İsim temizliği (Yeni rozetlerini ve boşlukları sil)
+                        # Robotistan'daki "Yeni" rozeti sorununu çözdük
                         isim = isim_etiketi.text.replace("Yeni", "").replace("YENİ", "").strip()
-                        if len(isim) < 4: 
+                        if len(isim) < 4:
                             continue
                             
                         link = link_etiketi.get('href')
@@ -135,7 +113,7 @@ def site_tara(ad, ayarlar, q_encoded):
                             
                         ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
                         
-                        # Artık tüm metni değil, sadece belirlediğimiz HTML etiketlerini ve fiyattaki 0 değerini kontrol ediyoruz
+                        # Net stok kontrolü (Gizli "tükendi" tuzağı iptal edildi)
                         if stok_etiketi or not ham_fiyat or "0,00" in ham_fiyat:
                             fiyat_gosterim = "Stokta Yok"
                             stok_durum = "Stokta Yok"
@@ -151,10 +129,10 @@ def site_tara(ad, ayarlar, q_encoded):
                             "Durum": stok_durum,
                             "Link": link
                         })
-                except Exception as ic_hata:
+                except Exception:
                     continue
     except Exception as e:
-        print(f"[{ad}] Bağlantı Koptu veya Engellendi: {str(e)}")
+        print(f"[{ad}] Hata: {str(e)}")
         
     return bulunanlar
 
@@ -163,13 +141,14 @@ def arama_yap(q: str):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+    # 4 Site için maksimum paralellik
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             try:
                 sonuclar.extend(gelecek.result())
             except Exception as e:
-                print("Eşzamanlı İşlem Hatası:", e)
+                print("Thread hatası:", e)
 
     sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
     return {"sonuclar": sonuclar}
