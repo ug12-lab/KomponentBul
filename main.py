@@ -5,6 +5,7 @@ import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
+import re
 
 app = FastAPI()
 
@@ -17,85 +18,67 @@ app.add_middleware(
 )
 
 # ==========================================
-# MERKEZİ TEDARİKÇİ VERİTABANI
+# AKILLI TEDARİKÇİ VERİTABANI (REVİZE EDİLDİ)
 # ==========================================
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "ozel_header": None,
         "seciciler": {
-            "kutu": ".product-item, .fl.col-12.text-center, li.col-3, .box",
-            "isim": ".product-name, .product-title, a",
-            "link": "a",
-            "fiyat": ".product-price",
-            "stok_uyarisi": ".tanitim-stock-alert"
+            "kutu": ".product-item, .box",
+            "isim": ".product-name, .product-title",
+            "fiyat": ".product-price"
         }
     },
     "Direnc.net": {
         "url_sablonu": "https://www.direnc.net/arama?q={}",
         "base_url": "https://www.direnc.net",
         "kategori": "Perakende",
-        "ozel_header": None, # 403 hatasını aşmak için kimlik yönetimini cloudscraper'a devrettik
         "seciciler": {
             "kutu": ".product-box, .product-item",
             "isim": ".product-name, .title",
-            "link": "a",
-            "fiyat": ".product-price, .current-price",
-            "stok_uyarisi": None
+            "fiyat": ".product-price, .current-price"
         }
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
         "base_url": "https://www.robotistan.com",
         "kategori": "Perakende",
-        "ozel_header": None,
         "seciciler": {
-            "kutu": ".product-item, .col-md-3, .product-wrapper",
+            "kutu": ".product-item, .product-wrapper",
             "isim": ".product-name",
-            "link": "a",
-            "fiyat": ".product-price",
-            "stok_uyarisi": None
+            "fiyat": ".product-price, .current-price"
         }
     },
     "Motorobit": {
         "url_sablonu": "https://www.motorobit.com/arama?q={}",
         "base_url": "https://www.motorobit.com",
         "kategori": "Perakende",
-        "ozel_header": None,
         "seciciler": {
             "kutu": ".showcase, .product-item",
             "isim": ".showcase-title a, .product-name",
-            "link": "a",
-            "fiyat": ".showcase-price-new, .product-price",
-            "stok_uyarisi": ".out-of-stock"
+            "fiyat": ".showcase-price-new, .product-price"
         }
     },
     "Robolink": {
         "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
         "base_url": "https://www.robolinkmarket.com",
         "kategori": "Perakende",
-        "ozel_header": None,
         "seciciler": {
             "kutu": ".product-item, .product-box",
             "isim": ".product-title, .product-name",
-            "link": "a",
-            "fiyat": ".current-price, .product-price",
-            "stok_uyarisi": ".out-of-stock"
+            "fiyat": ".current-price, .product-price"
         }
     },
     "Ozdisan": {
-        "url_sablonu": "https://www.ozdisan.com/arama?q={}", # 404 veren link yapısı düzeltildi
+        "url_sablonu": "https://www.ozdisan.com/Search?Word={}",
         "base_url": "https://www.ozdisan.com",
         "kategori": "Toptan",
-        "ozel_header": None,
         "seciciler": {
-            "kutu": ".product-list-item, .row-item",
-            "isim": ".product-name, h2",
-            "link": "a",
-            "fiyat": ".price, .wholesale-price",
-            "stok_uyarisi": ".no-stock"
+            "kutu": ".product-item, .product-card, .list-item",
+            "isim": ".product-name, .product-title, h2, a",
+            "fiyat": ".price, .wholesale-price, .product-price"
         }
     }
 }
@@ -120,9 +103,9 @@ def site_tara(ad, ayarlar, q_encoded):
     sec = ayarlar["seciciler"]
     
     bireysel_scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
-    
-    headers = ayarlar.get("ozel_header") or {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
     }
     
     try:
@@ -133,11 +116,11 @@ def site_tara(ad, ayarlar, q_encoded):
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
             
-            for urun in urunler[:3]:
+            # Daha fazla sonuç yakalamak için limiti 4'e çıkardık
+            for urun in urunler[:4]:  
                 isim_etiketi = urun.select_one(sec["isim"])
-                link_etiketi = urun.select_one(sec["link"])
+                link_etiketi = urun.select_one('a')
                 fiyat_etiketi = urun.select_one(sec["fiyat"])
-                stok_uyarisi = urun.select_one(sec["stok_uyarisi"]) if sec.get("stok_uyarisi") else None
                 
                 if isim_etiketi and link_etiketi:
                     isim = isim_etiketi.text.strip()
@@ -145,14 +128,22 @@ def site_tara(ad, ayarlar, q_encoded):
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link
                         
-                    ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else "0,00"
-                    
-                    if "0,00" in ham_fiyat or stok_uyarisi or not ham_fiyat:
-                        fiyat_gosterim = "Stokta Yok"
+                    # 1. BÜTÜNCÜL METİN STOK KONTROLÜ (CSS tuzağından kaçış)
+                    kart_metni = urun.text.lower()
+                    if "tükendi" in kart_metni or "stokta yok" in kart_metni or "gelince haber ver" in kart_metni:
                         stok_durum = "Stokta Yok"
                     else:
-                        fiyat_gosterim = f"{ham_fiyat} TL" if "TL" not in ham_fiyat else ham_fiyat
                         stok_durum = "Canlı Veri"
+
+                    # 2. REGEX İLE KESİN FİYAT AYIKLAMA (Sıfırları ve hataları yoksayma)
+                    ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
+                    sayi_bul = re.search(r'\d+[.,\d]*', ham_fiyat)
+                    
+                    if sayi_bul and stok_durum != "Stokta Yok":
+                        fiyat_gosterim = f"{sayi_bul.group(0)} TL"
+                    else:
+                        fiyat_gosterim = "Stokta Yok"
+                        stok_durum = "Stokta Yok"
                     
                     bulunanlar.append({
                         "Tedarikci": ad,
