@@ -220,5 +220,19 @@ def arama_yap(q: str):
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             sonuclar.extend(gelecek.result())
 
+    # TEKİLLEŞTİRME: Genel (wildcard) CSS seçiciler ("div[class*='product']" gibi)
+    # bazen aynı ürünün hem dış hem iç sarmalayıcı div'ini ayrı ayrı eşleştirip
+    # aynı ürünü listeye iki kez ekleyebiliyor. Ürün linki her zaman benzersiz
+    # olduğu için (aynı ürün = aynı link) buna göre tekilleştiriyoruz.
+    gorulmus_linkler = set()
+    benzersiz_sonuclar = []
+    for s in sonuclar:
+        anahtar = s.get("Link")
+        if anahtar in gorulmus_linkler:
+            continue
+        gorulmus_linkler.add(anahtar)
+        benzersiz_sonuclar.append(s)
+    sonuclar = benzersiz_sonuclar
+
     sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
     return {"sonuclar": sonuclar}
