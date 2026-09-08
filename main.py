@@ -103,13 +103,11 @@ def site_tara(ad, ayarlar, q_encoded):
                         if link and not link.startswith('http'):
                             link = ayarlar["base_url"] + link
                             
-                        # Fiyat metnini çek ve içinde rakam ara
                         ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
-                        rakam_varmi = re.search(r'\d', ham_fiyat)
+                        rakam_varmi = bool(re.search(r'\d', ham_fiyat))
                         
-                        # Kartın genel metninde açıkça "tükendi" yazmıyorsa ve fiyat rakam içeriyorsa stoku var kabul et
                         kart_metni = urun.text.lower()
-                        if "tükendi" in kart_metni or not rak_varmi := bool(rakam_varmi):
+                        if "tükendi" in kart_metni or not rakam_varmi:
                             fiyat_gosterim = "Stokta Yok"
                             stok_durum = "Stokta Yok"
                         else:
