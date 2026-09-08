@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
-import re
 from curl_cffi import requests as tls_requests
 
 app = FastAPI()
@@ -18,170 +17,69 @@ app.add_middleware(
 )
 
 TEDARIKCILER = {
-    "Elektromarketim": {
-        "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
-        "base_url": "https://www.elektromarketim.com",
-        "kategori": "Perakende",
-        "seciciler": {
-            "kutu": ".ems-prd, .product-item, .box",
-            "isim": ".ems-prd-name, .product-name",
-            "fiyat": ".ems-prd-price-selling, .product-price, .price"
-        }
-    },
-    "Robotistan": {
-        "url_sablonu": "https://www.robotistan.com/arama?q={}",
-        "base_url": "https://www.robotistan.com",
-        "kategori": "Perakende",
-        "seciciler": {
-            "kutu": ".product-item, .product-wrapper, .general-box",
-            "isim": ".product-name a, .product-name",
-            "fiyat": ".product-price, .current-price, .price"
-        }
-    },
-    "Motorobit": {
-        "url_sablonu": "https://www.motorobit.com/arama?q={}",
-        "base_url": "https://www.motorobit.com",
-        "kategori": "Perakende",
-        "seciciler": {
-            "kutu": ".showcase, .product-item, .col-item",
-            "isim": ".showcase-title a, .product-name",
-            "fiyat": ".showcase-price-new, .product-price, .price"
-        }
-    },
-    "Robolink": {
-        "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
-        "base_url": "https://www.robolinkmarket.com",
-        "kategori": "Perakende",
-        "seciciler": {
-            "kutu": ".product-item, .product-box",
-            "isim": ".product-title a, .product-name",
-            "fiyat": ".current-price, .product-price, .price"
-        }
-    }
+    "Elektromarketim": {"url": "https://www.elektromarketim.com/arama?q={}", "kutu": ".ems-prd, .product-item, .box"},
+    "Robotistan": {"url": "https://www.robotistan.com/arama?q={}", "kutu": ".product-item, .product-wrapper, .general-box"},
+    "Motorobit": {"url": "https://www.motorobit.com/arama?q={}", "kutu": ".showcase, .product-item, .col-item"},
+    "Robolink": {"url": "https://www.robolinkmarket.com/arama?q={}", "kutu": ".product-item, .product-box"}
 }
 
 @app.get("/")
 def ana_sayfa():
     return FileResponse("taslak.html")
 
-def fiyat_temizle(fiyat_str):
-    if not fiyat_str or "Stokta Yok" in fiyat_str:
-        return 999999.0
-    temiz = ''.join(c for c in fiyat_str if c.isdigit() or c == ',' or c == '.')
-    temiz = temiz.replace('.', '').replace(',', '.')
-    try:
-        return float(temiz)
-    except:
-        return 999999.0
-
 def site_tara(ad, ayarlar, q_encoded):
     bulunanlar = []
-    url = ayarlar["url_sablonu"].format(q_encoded)
-    sec = ayarlar["seciciler"]
+    url = ayarlar["url"].format(q_encoded)
     
     try:
-        # Cloudflare ve korumaları aşan Chrome simülasyonu
         res = tls_requests.get(url, impersonate="chrome110", timeout=15)
         
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            urunler = soup.select(sec["kutu"])
+            urunler = soup.select(ayarlar["kutu"])
             
-            eklenen_isimler = set()
-            sayac = 0
-            
-            for urun in urunler:
-                if sayac >= 5:
-                    break
-                    
-                try:
-                    kart_metni = urun.text.replace('\n', ' ')
-                    kart_metni_temiz = re.sub(r'\{.*?\}', '', kart_metni).strip()
-                    kart_metni_kucuk = kart_metni_temiz.lower()
-                    
-                    isim = ""
-                    link = url
-                    isim_etiketi = urun.select_one(sec["isim"])
-                    
-                    if isim_etiketi:
-                        isim = isim_etiketi.text.strip()
-                        a_etiketi = isim_etiketi if isim_etiketi.name == 'a' else isim_etiketi.find('a')
-                        if not a_etiketi: a_etiketi = urun.find('a')
-                        if a_etiketi: link = a_etiketi.get('href', url)
-                    else:
-                        en_uzun = 0
-                        for a in urun.find_all('a'):
-                            m = a.text.strip()
-                            if len(m) > en_uzun and "{" not in m:
-                                en_uzun = len(m)
-                                isim = m
-                                link = a.get('href', url)
-                    
-                    isim = isim.replace("Yeni", "").replace("YENİ", "").strip()
-                    isim = re.sub(r'\s+', ' ', isim)
-                    
-                    # Filtreyi 3 karaktere düşürdük (Örn: "LDR" veya "NTC" aramaları kaybolmasın diye)
-                    if len(isim) < 3 or isim.upper() in ["SEPETE EKLE", "İNCELE", "DETAY", "STOKTA YOK"]:
-                        continue
-                    if "{" in isim or "}" in isim:
-                        continue
-                    if isim in eklenen_isimler:
-                        continue
-                        
-                    if not link.startswith('http'):
-                        link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
-                        
-                    fiyat_gosterim = "Stokta Yok"
-                    stok_durum = "Stokta Yok"
-                    
-                    if "tükendi" in kart_metni_kucuk or "stokta yok" in kart_metni_kucuk:
-                        fiyat_gosterim = "Stokta Yok"
-                        stok_durum = "Stokta Yok"
-                    else:
-                        fiyat_etiketi = urun.select_one(sec["fiyat"])
-                        ham_fiyat = fiyat_etiketi.text.strip() if fiyat_etiketi else ""
-                        ham_fiyat = re.sub(r'\{.*?\}', '', ham_fiyat).strip()
-                        
-                        fiyat_bulundu = False
-                        
-                        if ham_fiyat:
-                            f_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', ham_fiyat)
-                            if f_match and "0,00" not in f_match.group(0):
-                                fiyat_gosterim = f_match.group(0) + " TL"
-                                stok_durum = "Canlı Veri"
-                                fiyat_bulundu = True
-                        
-                        if not fiyat_bulundu:
-                            genel_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', kart_metni_temiz, re.IGNORECASE)
-                            if genel_match:
-                                temiz_r = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', genel_match.group(0))
-                                if temiz_r and "0,00" not in temiz_r.group(0):
-                                    fiyat_gosterim = temiz_r.group(0) + " TL"
-                                    stok_durum = "Canlı Veri"
-                                    fiyat_bulundu = True
-                                    
-                        if not fiyat_bulundu:
-                            continue
-
-                    eklenen_isimler.add(isim)
-                    bulunanlar.append({
-                        "Tedarikci": ad,
-                        "Kategori": ayarlar["kategori"],
-                        "Urun": isim,
-                        "Fiyat": fiyat_gosterim,
-                        "Durum": stok_durum,
-                        "Link": link
-                    })
-                    sayac += 1
-                    
-                except Exception:
-                    continue
+            if urunler:
+                # KUTU BULUNDUYSA: İlk ürünün outerHTML'ini (ilk 300 karakterini) ekrana bas!
+                raw_html = str(urunler[0]).replace('\n', ' ')[:300] 
+                bulunanlar.append({
+                    "Tedarikci": ad,
+                    "Kategori": "BAŞARILI",
+                    "Urun": f"HTML KODU: {raw_html}...",
+                    "Fiyat": "200 OK",
+                    "Durum": f"{len(urunler)} Kutu Bulundu",
+                    "Link": url
+                })
+            else:
+                # SAYFA AÇILDI AMA KUTU YOKSA: Sitenin body kısmını bas!
+                body_html = str(soup.body)[:300].replace('\n', ' ') if soup.body else "Body boş"
+                bulunanlar.append({
+                    "Tedarikci": ad,
+                    "Kategori": "KUTU BULUNAMADI",
+                    "Urun": f"HTML GÖVDESİ: {body_html}...",
+                    "Fiyat": "200 OK",
+                    "Durum": "Yanlış Seçici",
+                    "Link": url
+                })
         else:
-            # Artık site engellerse sessizce kaybolmayacak, log ekranına basacak!
-            print(f"[{ad}] SİTE ENGELLENDİ - HTTP STATUS: {res.status_code}")
-            
+            # SİTE BİZİ ENGELLİYORSA (403/404)
+            bulunanlar.append({
+                "Tedarikci": ad,
+                "Kategori": "ENGEL",
+                "Urun": f"SUNUCU BİZİ BANLADI. Dönen Kod: {res.status_code}",
+                "Fiyat": "YASAK",
+                "Durum": "Engellendi",
+                "Link": url
+            })
     except Exception as e:
-        print(f"[{ad}] HATA: {str(e)}")
+        # KOD ÇÖKÜYORSAV VEYA ZAMAN AŞIMI
+        bulunanlar.append({
+            "Tedarikci": ad,
+            "Kategori": "ÇÖKME",
+            "Urun": f"Bağlantı Hatası: {str(e)}",
+            "Fiyat": "HATA",
+            "Durum": "Zaman Aşımı",
+            "Link": url
+        })
         
     return bulunanlar
 
@@ -195,5 +93,5 @@ def arama_yap(q: str):
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             sonuclar.extend(gelecek.result())
 
-    sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
+    # Fiyata göre sıralamayı kapattık ki hata mesajları kaybolmasın
     return {"sonuclar": sonuclar}
