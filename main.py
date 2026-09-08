@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import cloudscraper
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
 import re
+from curl_cffi import requests as tls_requests
 
 app = FastAPI()
 
@@ -17,7 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# SEÇİCİLER (Hem esnek hem güvenli genişlikte)
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
@@ -80,16 +79,15 @@ def site_tara(ad, ayarlar, q_encoded):
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
     
-    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
-    
     try:
-        res = scraper.get(url, timeout=15)
+        # Cloudflare ve korumaları aşan Chrome simülasyonu
+        res = tls_requests.get(url, impersonate="chrome110", timeout=15)
         
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
             
-            eklenen_isimler = set() # Robotistan klon engelliyici
+            eklenen_isimler = set()
             sayac = 0
             
             for urun in urunler:
@@ -97,12 +95,10 @@ def site_tara(ad, ayarlar, q_encoded):
                     break
                     
                 try:
-                    # 1. KART METNİ TEMİZLİĞİ (Robolink Vue kodlarını anında yok et)
                     kart_metni = urun.text.replace('\n', ' ')
                     kart_metni_temiz = re.sub(r'\{.*?\}', '', kart_metni).strip()
                     kart_metni_kucuk = kart_metni_temiz.lower()
                     
-                    # 2. HİBRİT İSİM BULUCU (Önce sınıf ara, yoksa en uzun A etiketini al)
                     isim = ""
                     link = url
                     isim_etiketi = urun.select_one(sec["isim"])
@@ -121,11 +117,11 @@ def site_tara(ad, ayarlar, q_encoded):
                                 isim = m
                                 link = a.get('href', url)
                     
-                    # İsim sterilizasyonu
                     isim = isim.replace("Yeni", "").replace("YENİ", "").strip()
-                    isim = re.sub(r'\s+', ' ', isim) # Fazla boşlukları tek boşluğa düşür
+                    isim = re.sub(r'\s+', ' ', isim)
                     
-                    if len(isim) < 5 or isim.upper() in ["SEPETE EKLE", "İNCELE", "DETAY", "STOKTA YOK"]:
+                    # Filtreyi 3 karaktere düşürdük (Örn: "LDR" veya "NTC" aramaları kaybolmasın diye)
+                    if len(isim) < 3 or isim.upper() in ["SEPETE EKLE", "İNCELE", "DETAY", "STOKTA YOK"]:
                         continue
                     if "{" in isim or "}" in isim:
                         continue
@@ -135,7 +131,6 @@ def site_tara(ad, ayarlar, q_encoded):
                     if not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
                         
-                    # 3. HİBRİT FİYAT VE STOK BULUCU
                     fiyat_gosterim = "Stokta Yok"
                     stok_durum = "Stokta Yok"
                     
@@ -149,7 +144,6 @@ def site_tara(ad, ayarlar, q_encoded):
                         
                         fiyat_bulundu = False
                         
-                        # A. Nokta Atışı: Fiyat etiketinden çek
                         if ham_fiyat:
                             f_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?', ham_fiyat)
                             if f_match and "0,00" not in f_match.group(0):
@@ -157,7 +151,6 @@ def site_tara(ad, ayarlar, q_encoded):
                                 stok_durum = "Canlı Veri"
                                 fiyat_bulundu = True
                         
-                        # B. Kurtarıcı: Etiket değişmişse genel kart metninden çek
                         if not fiyat_bulundu:
                             genel_match = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)', kart_metni_temiz, re.IGNORECASE)
                             if genel_match:
@@ -167,8 +160,6 @@ def site_tara(ad, ayarlar, q_encoded):
                                     stok_durum = "Canlı Veri"
                                     fiyat_bulundu = True
                                     
-                        # C. ÇÖP KUTUSU SİSTEMİ (En Önemli Kısım)
-                        # Tükendi yazmıyorsa ve fiyat da bulunamadıysa bu bir ürün değil sol menüdür! Atla.
                         if not fiyat_bulundu:
                             continue
 
@@ -185,8 +176,12 @@ def site_tara(ad, ayarlar, q_encoded):
                     
                 except Exception:
                     continue
+        else:
+            # Artık site engellerse sessizce kaybolmayacak, log ekranına basacak!
+            print(f"[{ad}] SİTE ENGELLENDİ - HTTP STATUS: {res.status_code}")
+            
     except Exception as e:
-        print(f"[{ad}] Hata: {str(e)}")
+        print(f"[{ad}] HATA: {str(e)}")
         
     return bulunanlar
 
