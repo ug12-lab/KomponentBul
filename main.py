@@ -16,22 +16,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-scraper = cloudscraper.create_scraper(
-    browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-)
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-}
-
 # ==========================================
-# MERKEZİ TEDARİKÇİ VERİTABANI (YENİ MİMARİ)
+# MERKEZİ TEDARİKÇİ VERİTABANI
 # ==========================================
 TEDARIKCILER = {
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
+        "ozel_header": None,
         "seciciler": {
             "kutu": ".product-item, .fl.col-12.text-center, li.col-3, .box",
             "isim": ".product-name, .product-title, a",
@@ -44,6 +37,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.direnc.net/arama?q={}",
         "base_url": "https://www.direnc.net",
         "kategori": "Perakende",
+        "ozel_header": {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'},
         "seciciler": {
             "kutu": ".product-box, .product-item",
             "isim": ".product-name, .title",
@@ -56,6 +50,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
         "base_url": "https://www.robotistan.com",
         "kategori": "Perakende",
+        "ozel_header": None,
         "seciciler": {
             "kutu": ".product-item, .col-md-3, .product-wrapper",
             "isim": ".product-name",
@@ -68,9 +63,10 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.motorobit.com/arama?q={}",
         "base_url": "https://www.motorobit.com",
         "kategori": "Perakende",
+        "ozel_header": None,
         "seciciler": {
-            "kutu": ".product-item, .showcase",
-            "isim": ".showcase-title, .product-name",
+            "kutu": ".showcase, .product-item",
+            "isim": ".showcase-title a, .product-name",
             "link": "a",
             "fiyat": ".showcase-price-new, .product-price",
             "stok_uyarisi": ".out-of-stock"
@@ -80,11 +76,12 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
         "base_url": "https://www.robolinkmarket.com",
         "kategori": "Perakende",
+        "ozel_header": None,
         "seciciler": {
             "kutu": ".product-item, .product-box",
-            "isim": ".product-name, .title",
+            "isim": ".product-title, .product-name",
             "link": "a",
-            "fiyat": ".product-price, .current-price",
+            "fiyat": ".current-price, .product-price",
             "stok_uyarisi": ".out-of-stock"
         }
     },
@@ -92,9 +89,10 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.ozdisan.com/Product/Search?searchtext={}",
         "base_url": "https://www.ozdisan.com",
         "kategori": "Toptan",
+        "ozel_header": None,
         "seciciler": {
-            "kutu": ".product-list-item, .product-item",
-            "isim": ".product-title, .product-name",
+            "kutu": ".product-list-item, .row-item",
+            "isim": ".product-name, h2",
             "link": "a",
             "fiyat": ".price, .wholesale-price",
             "stok_uyarisi": ".no-stock"
@@ -116,14 +114,23 @@ def fiyat_temizle(fiyat_str):
     except:
         return 999999.0
 
-# Her bir siteyi tarayan dinamik fonksiyon
 def site_tara(ad, ayarlar, q_encoded):
     bulunanlar = []
     url = ayarlar["url_sablonu"].format(q_encoded)
     sec = ayarlar["seciciler"]
     
+    # Çakışmayı önlemek için her siteye özel taze bir scraper oluşturuluyor
+    bireysel_scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+    
+    # Eğer siteye özel bir header varsa onu, yoksa standart PC kimliğini kullan
+    headers = ayarlar.get("ozel_header") or {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
     try:
-        res = scraper.get(url, headers=HEADERS, timeout=12)
+        res = bireysel_scraper.get(url, headers=headers, timeout=12)
+        print(f"{ad} Status: {res.status_code}") # Hata ayıklama için Render loglarına yaz
+        
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
@@ -151,14 +158,14 @@ def site_tara(ad, ayarlar, q_encoded):
                     
                     bulunanlar.append({
                         "Tedarikci": ad,
-                        "Kategori": ayarlar["kategori"], # Perakende / Toptan ayrımı için
+                        "Kategori": ayarlar["kategori"],
                         "Urun": isim,
                         "Fiyat": fiyat_gosterim,
                         "Durum": stok_durum,
                         "Link": link
                     })
     except Exception as e:
-        print(f"{ad} Hata:", e)
+        print(f"{ad} Hata:", str(e))
         
     return bulunanlar
 
@@ -167,7 +174,7 @@ def arama_yap(q: str):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
 
-    # 6 siteyi eşzamanlı (paralel) tarayarak hızı 6 katına çıkarıyoruz
+    # Maksimum 6 paralel işlem ile arama
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
