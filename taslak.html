@@ -12,8 +12,19 @@
         padding: 40px;
     }
     .container { max-width: 900px; margin: 0 auto; }
-    h1 { color: #0f172a; margin-bottom: 5px; text-align: center; }
-    p.sub { color: #64748b; margin-top: 0; text-align: center; margin-bottom: 30px; }
+    
+    /* Logo Alanı */
+    .logo-container { 
+        text-align: center; 
+        margin-bottom: 15px; 
+    }
+    .logo-container img {
+        max-width: 450px; /* Logonun ekrandaki büyüklüğünü buradan değiştirebilirsin */
+        width: 100%;
+        height: auto;
+    }
+    
+    p.sub { color: #64748b; margin-top: 0; text-align: center; margin-bottom: 30px; font-weight: 500;}
     
     /* Kategori Seçim Alanı Stilleri */
     .category-selection {
@@ -72,19 +83,25 @@
 <body>
    
 <div class="container">
-    <h1>KomponentBul</h1>
+    
+    <!-- H1 Başlığı Silindi, Yerine Logo Eklendi -->
+    <div class="logo-container">
+        <!-- Logoyu GitHub depondan canlı çeker. Resmi "logo.png" adıyla GitHub'a yüklemelisin. -->
+        <img src="https://raw.githubusercontent.com/ug12-lab/KomponentBul/main/logo.png" alt="KomponentBul Logo">
+    </div>
+    
     <p class="sub">Elektronik parça kodunu gir, tüm kaynaklardaki fiyatları anında karşılaştır.</p>
 
-    <!-- Toptan / Perakende Kategori Seçimi -->
+    <!-- Güncellenmiş Toptan / Perakende Kategori Seçimi -->
     <div class="category-selection">
         <label>
             <input type="radio" name="kategori" value="Hepsi" checked> Tüm Siteler
         </label>
         <label>
-            <input type="radio" name="kategori" value="Perakende"> Sadece Perakende
+            <input type="radio" name="kategori" value="Perakende"> Perakende Satış
         </label>
         <label>
-            <input type="radio" name="kategori" value="Toptan"> Sadece Toptan (B2B)
+            <input type="radio" name="kategori" value="Toptan"> Toptan Satış
         </label>
     </div>
 
@@ -114,7 +131,6 @@ async function ara() {
     const kod = document.getElementById('searchInput').value.trim();
     if (!kod) { alert("Lütfen bir parça kodu girin."); return; }
 
-    // Seçilen kategoriyi al
     const secilenKategori = document.querySelector('input[name="kategori"]:checked').value;
 
     const loading = document.getElementById('loadingText');
@@ -126,7 +142,6 @@ async function ara() {
     tbody.innerHTML = '';
 
     try {
-        // Parametreye kategori bilgisini de ekledik
         const response = await fetch(`/arama?q=${encodeURIComponent(kod)}&kategori=${encodeURIComponent(secilenKategori)}`);
         if (!response.ok) throw new Error("Sunucu yanıt vermedi.");
         const data = await response.json();
@@ -141,7 +156,6 @@ async function ara() {
 
         data.sonuclar.forEach((item, index) => {
             let durumHtml = "";
-            // main.py'deki "Tükendi" veya eski "Stokta Yok" ibarelerini yakala
             if (item.Durum === "Tükendi" || item.Durum === "Stokta Yok") {
                 durumHtml = '<span class="stok-yok-etiket">○ Stokta Yok</span>';
             } else {
