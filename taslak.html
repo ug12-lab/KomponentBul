@@ -12,9 +12,34 @@
         padding: 40px;
     }
     .container { max-width: 900px; margin: 0 auto; }
-    h1 { color: #0f172a; margin-bottom: 5px; }
-    p.sub { color: #64748b; margin-top: 0; }
-    .search-box { display: flex; gap: 12px; margin: 25px 0; }
+    h1 { color: #0f172a; margin-bottom: 5px; text-align: center; }
+    p.sub { color: #64748b; margin-top: 0; text-align: center; margin-bottom: 30px; }
+    
+    /* Kategori Seçim Alanı Stilleri */
+    .category-selection {
+        display: flex;
+        justify-content: center;
+        gap: 25px;
+        margin-bottom: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+    .category-selection label {
+        cursor: pointer;
+        font-weight: 500;
+        color: #475569;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: color 0.2s;
+    }
+    .category-selection label:hover { color: #3b82f6; }
+    .category-selection input[type="radio"] { cursor: pointer; accent-color: #3b82f6; width: 16px; height: 16px; }
+
+    .search-box { display: flex; gap: 12px; margin-bottom: 25px; }
     input[type="text"] {
         flex: 1; padding: 14px 18px; border: 2px solid #e2e8f0;
         border-radius: 8px; font-size: 16px;
@@ -26,7 +51,7 @@
         cursor: pointer;
     }
     button.search-btn:hover { background-color: #2563eb; }
-    .loading { display: none; color: #3b82f6; font-weight: bold; margin-bottom: 15px; }
+    .loading { display: none; color: #3b82f6; font-weight: bold; margin-bottom: 15px; text-align: center; }
     table {
         width: 100%; border-collapse: collapse; background: white;
         border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
@@ -49,6 +74,19 @@
 <div class="container">
     <h1>KomponentBul</h1>
     <p class="sub">Elektronik parça kodunu gir, tüm kaynaklardaki fiyatları anında karşılaştır.</p>
+
+    <!-- Toptan / Perakende Kategori Seçimi -->
+    <div class="category-selection">
+        <label>
+            <input type="radio" name="kategori" value="Hepsi" checked> Tüm Siteler
+        </label>
+        <label>
+            <input type="radio" name="kategori" value="Perakende"> Sadece Perakende
+        </label>
+        <label>
+            <input type="radio" name="kategori" value="Toptan"> Sadece Toptan (B2B)
+        </label>
+    </div>
 
     <div class="search-box">
         <input type="text" id="searchInput" placeholder="Parça kodu (örn. STM32, 1K direnç)">
@@ -76,6 +114,9 @@ async function ara() {
     const kod = document.getElementById('searchInput').value.trim();
     if (!kod) { alert("Lütfen bir parça kodu girin."); return; }
 
+    // Seçilen kategoriyi al
+    const secilenKategori = document.querySelector('input[name="kategori"]:checked').value;
+
     const loading = document.getElementById('loadingText');
     const table = document.getElementById('resultsTable');
     const tbody = document.getElementById('resultsBody');
@@ -85,32 +126,30 @@ async function ara() {
     tbody.innerHTML = '';
 
     try {
-        // API adresi ve parametresi main.py'ye göre güncellendi
-        const response = await fetch(`/arama?q=${encodeURIComponent(kod)}`);
+        // Parametreye kategori bilgisini de ekledik
+        const response = await fetch(`/arama?q=${encodeURIComponent(kod)}&kategori=${encodeURIComponent(secilenKategori)}`);
         if (!response.ok) throw new Error("Sunucu yanıt vermedi.");
         const data = await response.json();
 
         loading.style.display = 'none';
 
         if (!data.sonuclar || data.sonuclar.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">Sonuç bulunamadı.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Bu kategoride sonuç bulunamadı.</td></tr>';
             table.style.display = 'table';
             return;
         }
 
         data.sonuclar.forEach((item, index) => {
-            // Stok durumuna göre renkli etiket ataması
             let durumHtml = "";
-            if (item.Durum === "Stokta Yok") {
+            // main.py'deki "Tükendi" veya eski "Stokta Yok" ibarelerini yakala
+            if (item.Durum === "Tükendi" || item.Durum === "Stokta Yok") {
                 durumHtml = '<span class="stok-yok-etiket">○ Stokta Yok</span>';
             } else {
                 durumHtml = '<span class="canli-etiket">● Canlı Veri</span>';
             }
 
-            // Eğer ürün ilk sıradaysa ve stokta varsa "en ucuz" olarak yeşil vurgula
-            const satirClass = (index === 0 && item.Durum !== "Stokta Yok") ? 'en-ucuz' : '';
+            const satirClass = (index === 0 && item.Durum !== "Tükendi" && item.Durum !== "Stokta Yok") ? 'en-ucuz' : '';
 
-            // main.py'den gelen yeni anahtar kelimeler (item.Tedarikci, item.Urun vb.) kullanıldı
             tbody.innerHTML += `
                 <tr class="${satirClass}">
                     <td><strong>${item.Tedarikci}</strong></td>
@@ -125,7 +164,7 @@ async function ara() {
         table.style.display = 'table';
     } catch (error) {
         loading.style.display = 'none';
-        tbody.innerHTML = '<tr><td colspan="5">Sunucuya ulaşılamadı. Sunucunun çalıştığından emin ol.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Sunucuya ulaşılamadı. Sunucunun çalıştığından emin ol.</td></tr>';
         table.style.display = 'table';
         console.error(error);
     }
