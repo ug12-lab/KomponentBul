@@ -12,12 +12,14 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,  # "*" ile allow_credentials=True birlikte kullanılamaz
+    allow_credentials=False,  
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --- TOPTAN VE PERAKENDE SİTELER EKLENDİ ---
 TEDARIKCILER = {
+    # B2C - Perakende
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
@@ -41,18 +43,44 @@ TEDARIKCILER = {
         "base_url": "https://www.robolinkmarket.com",
         "kategori": "Perakende",
         "seciciler": {"kutu": ".product-item, .product-box"}
+    },
+    "Direnç.net": {
+        "url_sablonu": "https://www.direnc.net/arama?q={}",
+        "base_url": "https://www.direnc.net",
+        "kategori": "Perakende",
+        "seciciler": {"kutu": ".product-item, .col-md-3, div[class*='product']"}
+    },
+    "Komponentci": {
+        "url_sablonu": "https://www.komponentci.net/arama?q={}",
+        "base_url": "https://www.komponentci.net",
+        "kategori": "Perakende",
+        "seciciler": {"kutu": ".product-item, .showcase, div[class*='product']"}
+    },
+    "Samm Market": {
+        "url_sablonu": "https://market.samm.com/arama?q={}",
+        "base_url": "https://market.samm.com",
+        "kategori": "Perakende",
+        "seciciler": {"kutu": ".product-item, .product-box, div[class*='product']"}
+    },
+    # B2B - Toptan
+    "Özdisan": {
+        "url_sablonu": "https://www.ozdisan.com/Arama?q={}",
+        "base_url": "https://www.ozdisan.com",
+        "kategori": "Toptan",
+        "seciciler": {"kutu": ".product-item, .list-item, div[class*='product']"}
+    },
+    "Merter Elektronik": {
+        "url_sablonu": "https://www.merterelektronik.com/arama?q={}",
+        "base_url": "https://www.merterelektronik.com",
+        "kategori": "Toptan",
+        "seciciler": {"kutu": ".product-item, .product, div[class*='product']"}
     }
 }
 
-# CSS ile gizlenmiş (görünmez) elementleri tespit etmek için kullanılan class/attribute'lar.
-# Birçok site (ör. Robolink) "Tükendi" bloğunu HER üründe DOM'a basar, sadece
-# stoktaysa bu bloğu bu class'larla gizler. Bu yüzden salt metin araması yanıltıcıdır.
 GIZLI_ISARETLERI = {"d-none", "hidden", "invisible", "display-none", "hide"}
 
 
 def gorunur_mu(etiket):
-    """Bir elementin (veya üst elementlerinden birinin) CSS ile gizlenip
-    gizlenmediğini kontrol eder. Gizliyse False döner."""
     for el in [etiket] + list(etiket.parents):
         if not hasattr(el, "get"):
             continue
@@ -79,7 +107,6 @@ def fiyat_temizle(fiyat_str):
 
 
 def metni_sayiya_cevir(fiyat_metni):
-    """'2.151,00 TL' -> 2151.00"""
     temiz = re.sub(r'[^\d,.]', '', fiyat_metni)
     temiz = temiz.replace('.', '').replace(',', '.')
     try:
@@ -111,7 +138,6 @@ def site_tara(ad, ayarlar, q_encoded):
                     isim = ""
                     link = url
 
-                    # 1. İSİM BULUCU
                     for a in urun.find_all('a'):
                         text = a.text.replace("Yeni", "").replace("YENİ", "").strip()
                         text = re.sub(r'\{.*?\}', '', text)
@@ -130,8 +156,6 @@ def site_tara(ad, ayarlar, q_encoded):
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
-                    # 2. GÖRÜNÜRLÜK-FARKINDA STOK KONTROLÜ
-                    # "Tükendi" bloğu CSS ile gizlenmişse (d-none vb.) bu ürün aslında stokta demektir.
                     stokta_yok_mu = False
 
                     aday = urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock')
@@ -148,9 +172,6 @@ def site_tara(ad, ayarlar, q_encoded):
                     fiyat_gosterim = "Tükendi"
                     stok_durum = "Tükendi"
 
-                    # 3. FİYAT BULUCU (birden fazla eşleşme varsa en düşüğünü/güncel fiyatı seç —
-                    # indirimli ürünlerde üstü çizili eski fiyat metinde önce geçtiği için yanlış
-                    # fiyat seçilmesini engeller)
                     raw_text = urun.text.replace('\n', ' ')
                     raw_text = re.sub(r'\{.*?\}', '', raw_text)
 
@@ -179,7 +200,6 @@ def site_tara(ad, ayarlar, q_encoded):
                                 fiyat_gosterim = alternatif_sayi.group(0) + " TL"
                                 stok_durum = "Canlı Veri"
 
-                    # 4. ÇÖP FİLTRESİ
                     if not stokta_yok_mu and stok_durum == "Tükendi":
                         continue
 
@@ -204,26 +224,28 @@ def site_tara(ad, ayarlar, q_encoded):
 
     return bulunanlar
 
-
 @app.get("/")
 def ana_sayfa():
     return FileResponse("taslak.html")
 
-
+# Kategori Parametresi ve Filtreleme Mantığı Eklendi
 @app.get("/arama")
-def arama_yap(q: str):
+def arama_yap(q: str, kategori: str = "Hepsi"):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
+    
+    # Kullanıcı "Toptan" seçtiyse sadece Toptan siteleri, "Perakende" seçtiyse sadece Perakende siteleri tarar.
+    filtrelenmis_siteler = {
+        ad: ayarlar for ad, ayarlar in TEDARIKCILER.items()
+        if kategori == "Hepsi" or ayarlar["kategori"] == kategori
+    }
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
+    # max_workers 8'e çıkarıldı, çünkü taranacak site sayısı arttı.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in filtrelenmis_siteler.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             sonuclar.extend(gelecek.result())
 
-    # TEKİLLEŞTİRME: Genel (wildcard) CSS seçiciler ("div[class*='product']" gibi)
-    # bazen aynı ürünün hem dış hem iç sarmalayıcı div'ini ayrı ayrı eşleştirip
-    # aynı ürünü listeye iki kez ekleyebiliyor. Ürün linki her zaman benzersiz
-    # olduğu için (aynı ürün = aynı link) buna göre tekilleştiriyoruz.
     gorulmus_linkler = set()
     benzersiz_sonuclar = []
     for s in sonuclar:
