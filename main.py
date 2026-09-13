@@ -23,7 +23,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".ems-prd, .product-item, div[class*='product']"}
+        "seciciler": {"kutu": ".ems-prd"}
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
@@ -35,37 +35,37 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.motorobit.com/arama?q={}",
         "base_url": "https://www.motorobit.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".showcase, div[class*='product'], li[class*='product']"}
+        "seciciler": {"kutu": "div[data-toggle='product'], .showcase"}
     },
     "Robolink": {
         "url_sablonu": "https://www.robolinkmarket.com/arama?q={}",
         "base_url": "https://www.robolinkmarket.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-item, .product-box"}
+        "seciciler": {"kutu": ".product-item, .product-box, .showcase"}
     },
     "Direnç.net": {
         "url_sablonu": "https://www.direnc.net/arama?q={}",
         "base_url": "https://www.direnc.net",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".showcase, .product-item, div[data-toggle='product']"}
+        "seciciler": {"kutu": "div[data-toggle='product'], .showcase"}
     },
     "Kartal Otomasyon": {
         "url_sablonu": "https://www.kartalotomasyon.com.tr/arama?q={}",
         "base_url": "https://www.kartalotomasyon.com.tr",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".showcase, .product-item, div[data-toggle='product']"}
+        "seciciler": {"kutu": "div[data-toggle='product'], .showcase"}
     },
     "Komponentci": {
         "url_sablonu": "https://www.komponentci.net/Arama.aspx?kelime={}",
         "base_url": "https://www.komponentci.net",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".productItem, .showcase, div[class*='product']"}
+        "seciciler": {"kutu": ".productItem, .showcase"}
     },
     "Samm Market": {
         "url_sablonu": "https://market.samm.com/search?q={}",
         "base_url": "https://market.samm.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-card, div[class*='product'], a[class*='product']"}
+        "seciciler": {"kutu": ".product-card"}
     },
     
     # --- TOPTAN SİTELER ---
@@ -73,37 +73,37 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.merterelektronik.com/Arama.aspx?kelime={}",
         "base_url": "https://www.merterelektronik.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".productItem, .showcase, div[class*='product']"}
+        "seciciler": {"kutu": ".productItem, .showcase"}
     },
     "Özdisan": {
         "url_sablonu": "https://ozdisan.com/Search?q={}",
         "base_url": "https://ozdisan.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".product-item, div[class*='product']"}
+        "seciciler": {"kutu": ".product-item"}
     },
     "Empastore": {
         "url_sablonu": "https://www.empastore.com/arama?q={}",
         "base_url": "https://www.empastore.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".product-item, .showcase, div[class*='product']"}
+        "seciciler": {"kutu": ".product-item, .showcase"}
     },
     "Karaköy Elektronik": {
         "url_sablonu": "https://www.karakoyelektronik.com/arama?q={}",
         "base_url": "https://www.karakoyelektronik.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".showcase, .product-item, div[data-toggle='product']"}
+        "seciciler": {"kutu": ".showcase, .product-item"}
     },
     "F1 Depo": {
         "url_sablonu": "https://www.f1depo.com/arama?q={}",
         "base_url": "https://www.f1depo.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".showcase, .product-item, div[data-toggle='product']"}
+        "seciciler": {"kutu": ".showcase, .product-item"}
     },
     "Elektrovadi": {
         "url_sablonu": "https://www.elektrovadi.com/arama?q={}",
         "base_url": "https://www.elektrovadi.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".showcase, .product-item, div[data-toggle='product']"}
+        "seciciler": {"kutu": ".showcase, .product-item"}
     }
 }
 
@@ -154,7 +154,6 @@ def site_tara(ad, ayarlar, q_encoded):
             urunler = soup.select(sec["kutu"])
             
             # YENİ İDEASOFT V8 TEMA KURTARICISI
-            # Eğer .showcase gibi eski isimler bulunamazsa, direkt detay kartını bularak dış çerçeveyi yakalar
             if not urunler:
                 detay_kartlari = soup.select(".product-detail-card")
                 if detay_kartlari:
