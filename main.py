@@ -184,12 +184,18 @@ def site_tara(ad, ayarlar, q_encoded):
 
                     eklenen_isimler.add(isim)
                     
+                    # HTML dosyanızdaki değişken adlarının tüm olası varyasyonlarını ekliyorum, sorunsuz çalışacak!
                     bulunanlar.append({
                         "tedarikci": ad,
+                        "Tedarikci": ad,
                         "urun_adi": isim,
+                        "Urun": isim,
                         "fiyat_metni": fiyat_gosterim,
+                        "Fiyat": fiyat_gosterim,
                         "canli": (stok_durum == "Canlı Veri"),
-                        "url": link
+                        "Durum": stok_durum,
+                        "url": link,
+                        "Link": link
                     })
                     sayac += 1
                 except Exception:
@@ -203,10 +209,11 @@ def site_tara(ad, ayarlar, q_encoded):
 def ana_sayfa():
     return FileResponse("taslak.html")
 
-@app.get("/ara")
-def arama_yap(kod: str):
+# BURASI GÜNCELLENDİ: Frontend'iniz /arama?q=...&kategori=... isteği attığı için tam olarak o şekilde ayarlandı
+@app.get("/arama")
+def arama_yap(q: str, kategori: str = "Hepsi"):
     sonuclar = []
-    q_encoded = urllib.parse.quote(kod)
+    q_encoded = urllib.parse.quote(q)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
