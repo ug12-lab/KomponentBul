@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 TEDARIKCILER = {
+    # --- PERAKENDE SİTELER ---
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
@@ -53,6 +54,32 @@ TEDARIKCILER = {
         "base_url": "https://www.kartalotomasyon.com.tr",
         "kategori": "Perakende",
         "seciciler": {"kutu": ".showcase, .product-item, div[data-toggle='product']"}
+    },
+    "Komponentci": {
+        "url_sablonu": "https://www.komponentci.net/Arama.aspx?kelime={}",
+        "base_url": "https://www.komponentci.net",
+        "kategori": "Perakende",
+        "seciciler": {"kutu": ".productItem, .showcase, div[class*='product']"}
+    },
+    "Samm Market": {
+        "url_sablonu": "https://market.samm.com/search?q={}",
+        "base_url": "https://market.samm.com",
+        "kategori": "Perakende",
+        "seciciler": {"kutu": ".product-card, div[class*='product'], a[class*='product']"}
+    },
+    
+    # --- TOPTAN SİTELER ---
+    "Merter Elektronik": {
+        "url_sablonu": "https://www.merterelektronik.com/Arama.aspx?kelime={}",
+        "base_url": "https://www.merterelektronik.com",
+        "kategori": "Toptan",
+        "seciciler": {"kutu": ".productItem, .showcase, div[class*='product']"}
+    },
+    "Özdisan": {
+        "url_sablonu": "https://ozdisan.com/Search?q={}",
+        "base_url": "https://ozdisan.com",
+        "kategori": "Toptan",
+        "seciciler": {"kutu": ".product-item, div[class*='product']"}
     }
 }
 
@@ -151,8 +178,9 @@ def site_tara(ad, ayarlar, q_encoded):
                     raw_text = re.sub(r'\{.*?\}', '', raw_text)
 
                     if not stokta_yok_mu:
+                        # Toptan sitelerinde Dolar/Euro kullanılabildiği için para birimleri eklendi
                         fiyat_eslesmeler = re.findall(
-                            r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl)',
+                            r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl|USD|\$|EUR|€)',
                             raw_text, re.IGNORECASE
                         )
                         gecerli = []
@@ -165,7 +193,7 @@ def site_tara(ad, ayarlar, q_encoded):
                             gecerli.sort(key=lambda x: x[0])
                             _, en_uygun_metin = gecerli[0]
                             fiyat = en_uygun_metin.upper().replace('₺', ' TL').strip()
-                            if "TL" not in fiyat:
+                            if not any(curr in fiyat for curr in ["TL", "USD", "$", "EUR", "€"]):
                                 fiyat += " TL"
                             fiyat_gosterim = fiyat
                             stok_durum = "Canlı Veri"
@@ -184,7 +212,6 @@ def site_tara(ad, ayarlar, q_encoded):
 
                     eklenen_isimler.add(isim)
                     
-                    # HTML dosyanızdaki değişken adlarının tüm olası varyasyonlarını ekliyorum, sorunsuz çalışacak!
                     bulunanlar.append({
                         "tedarikci": ad,
                         "Tedarikci": ad,
@@ -209,14 +236,26 @@ def site_tara(ad, ayarlar, q_encoded):
 def ana_sayfa():
     return FileResponse("taslak.html")
 
-# BURASI GÜNCELLENDİ: Frontend'iniz /arama?q=...&kategori=... isteği attığı için tam olarak o şekilde ayarlandı
 @app.get("/arama")
 def arama_yap(q: str, kategori: str = "Hepsi"):
     sonuclar = []
     q_encoded = urllib.parse.quote(q)
+    kategori_kucuk = kategori.lower()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-        gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in TEDARIKCILER.items()]
+    # Aynı anda çok daha fazla sitede arama yapılacağı için hız artırıldı (max_workers=10)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        gelecek_sonuclar = []
+        for ad, ayarlar in TEDARIKCILER.items():
+            site_kategori = ayarlar["kategori"].lower()
+            
+            # KATEGORİ FİLTRESİ
+            if kategori_kucuk != "hepsi":
+                # Arayüzden "toptan satış" seçilirse ve site "toptan" ise eşleşir, aksi halde atlar.
+                if site_kategori not in kategori_kucuk and kategori_kucuk not in site_kategori:
+                    continue
+
+            gelecek_sonuclar.append(executor.submit(site_tara, ad, ayarlar, q_encoded))
+            
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             sonuclar.extend(gelecek.result())
 
