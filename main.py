@@ -91,4 +91,4 @@ def metni_sayiya_cevir(fiyat_metni):
     except Exception:
         return None
 
-def site_t
+def site_tara(ad, ayarlar, q_encoded):
