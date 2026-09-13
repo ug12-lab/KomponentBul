@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 TEDARIKCILER = {
+    # --- PERAKENDE SİTELER ---
     "Elektromarketim": {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
@@ -66,6 +67,8 @@ TEDARIKCILER = {
         "kategori": "Perakende",
         "seciciler": {"kutu": ".product-card, div[class*='product'], a[class*='product']"}
     },
+    
+    # --- TOPTAN SİTELER ---
     "Merter Elektronik": {
         "url_sablonu": "https://www.merterelektronik.com/Arama.aspx?kelime={}",
         "base_url": "https://www.merterelektronik.com",
@@ -149,6 +152,13 @@ def site_tara(ad, ayarlar, q_encoded):
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             urunler = soup.select(sec["kutu"])
+            
+            # YENİ İDEASOFT V8 TEMA KURTARICISI
+            # Eğer .showcase gibi eski isimler bulunamazsa, direkt detay kartını bularak dış çerçeveyi yakalar
+            if not urunler:
+                detay_kartlari = soup.select(".product-detail-card")
+                if detay_kartlari:
+                    urunler = [kart.parent for kart in detay_kartlari if kart.parent]
 
             eklenen_isimler = set()
             sayac = 0
