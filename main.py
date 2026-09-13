@@ -47,32 +47,32 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.direnc.net/arama?q={}",
         "base_url": "https://www.direnc.net",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-item, .product-list-item"}
+        "seciciler": {"kutu": ".product-item, .product-list-item"} # TAHMİNİ
     },
     "Komponentci": {
         "url_sablonu": "https://www.komponentci.net/arama?q={}",
         "base_url": "https://www.komponentci.net",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-item, .showcase"}
+        "seciciler": {"kutu": ".product-item, .showcase"} # TAHMİNİ
     },
     "Samm Market": {
         "url_sablonu": "https://market.samm.com/arama?q={}",
         "base_url": "https://market.samm.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-item, .product-box"}
+        "seciciler": {"kutu": ".product-item, .product-box"} # TAHMİNİ
     },
     # B2B - Toptan
     "Özdisan": {
         "url_sablonu": "https://www.ozdisan.com/Arama?q={}",
         "base_url": "https://www.ozdisan.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".product-item, .list-item"}
+        "seciciler": {"kutu": ".product-item, .list-item"} # TAHMİNİ
     },
     "Merter Elektronik": {
         "url_sablonu": "https://www.merterelektronik.com/arama?q={}",
         "base_url": "https://www.merterelektronik.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".product-item, .product"}
+        "seciciler": {"kutu": ".product-item, .product"} # TAHMİNİ
     }
 }
 
@@ -93,7 +93,7 @@ def gorunur_mu(etiket):
     return True
 
 def fiyat_temizle(fiyat_str):
-    if not fiyat_str or "Tükendi" in fiyat_str or "Stokta" in fiyat_str:
+    if not fiyat_str or "Tükendi" in fiyat_str or "Stokta" in fiyat_str or "Hata" in fiyat_str:
         return 999999.0
     temiz = ''.join(c for c in fiyat_str if c.isdigit() or c in ',.')
     temiz = temiz.replace('.', '').replace(',', '.')
@@ -123,7 +123,6 @@ def site_tara(ad, ayarlar, q_encoded):
             urunler = soup.select(sec["kutu"])
             
             is_detail_page = False
-            # YÖNLENDİRME AVCISI: Eğer liste kutusu bulamazsa, doğrudan ürün detayına atmıştır. 
             if not urunler:
                 body = soup.find('body')
                 if body:
@@ -141,15 +140,12 @@ def site_tara(ad, ayarlar, q_encoded):
                     isim = ""
                     link = url
 
-                    # 1. İSİM BULUCU
-                    # Yönlendirme varsa (Detay sayfasıysa) en tepe başlığı (H1) al
                     if is_detail_page:
                         h1 = urun.find('h1')
                         if h1:
                             isim = h1.text.replace("Yeni", "").replace("YENİ", "").strip()
                             isim = re.sub(r'\{.*?\}', '', isim).strip()
                             
-                    # Liste sayfasındaysak standart A etiketi taramaya devam et
                     if len(isim) < 5:
                         for a in urun.find_all('a'):
                             text = a.text.replace("Yeni", "").replace("YENİ", "").strip()
@@ -169,7 +165,6 @@ def site_tara(ad, ayarlar, q_encoded):
                     if link and not link.startswith('http'):
                         link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
 
-                    # 2. GÖRÜNÜRLÜK-FARKINDA STOK KONTROLÜ
                     stokta_yok_mu = False
 
                     aday = urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock')
@@ -186,7 +181,6 @@ def site_tara(ad, ayarlar, q_encoded):
                     fiyat_gosterim = "Tükendi"
                     stok_durum = "Tükendi"
 
-                    # 3. EVRENSEL FİYAT BULUCU (TL, USD, EUR Desteği)
                     raw_text = urun.text.replace('\n', ' ')
                     raw_text = re.sub(r'\{.*?\}', '', raw_text)
 
@@ -205,7 +199,6 @@ def site_tara(ad, ayarlar, q_encoded):
                         if gecerli:
                             tl_olanlar = [g for g in gecerli if "TL" in g[1].upper() or "₺" in g[1]]
                             
-                            # Sıralama algoritmasının bozulmaması için TL fiyatı bulursa onu önceliklendirir
                             if tl_olanlar:
                                 tl_olanlar.sort(key=lambda x: x[0])
                                 _, en_uygun_metin = tl_olanlar[0]
@@ -226,10 +219,7 @@ def site_tara(ad, ayarlar, q_encoded):
                                 fiyat_gosterim = alternatif_sayi.group(0) + " TL"
                                 stok_durum = "Canlı Veri"
 
-                    # 4. ÇÖP FİLTRESİ VE B2B GİZLİ FİYAT KONTROLÜ
                     if not stokta_yok_mu and stok_durum == "Tükendi":
-                        # Detay sayfasındaysak ama fiyat okuyamadıysak (Örn: Özdisan Üye Girişi istiyorsa) 
-                        # Ürünü gizlemek yerine Fiyat Göster uyarısı veriyoruz. (Boş arama sayfalarını eler)
                         if is_detail_page and len(isim) > 5 and "arama" not in isim.lower() and "bulunamadı" not in raw_text.lower():
                             fiyat_gosterim = "Siteye Git"
                             stok_durum = "Fiyat Gizli"
@@ -252,8 +242,27 @@ def site_tara(ad, ayarlar, q_encoded):
                     sayac += 1
                 except Exception:
                     continue
+
+            # TEŞHİS MODU ENJEKSİYONU: Eğer bu site için hiçbir ürün bulunamadıysa tabloya hata bas.
+            if not bulunanlar:
+                bulunanlar.append({
+                    "Tedarikci": ad,
+                    "Kategori": ayarlar["kategori"],
+                    "Urun": f"🛠️ TEŞHİS: Kutu bulunamadı. Arama liste sayfasındaki outerHTML gerekli.",
+                    "Fiyat": "Hata",
+                    "Durum": "Stokta Yok", # Kırmızı görünmesi için
+                    "Link": url
+                })
+
     except Exception as e:
-        print(f"[{ad}] HATA: {str(e)}")
+        bulunanlar.append({
+            "Tedarikci": ad,
+            "Kategori": ayarlar["kategori"],
+            "Urun": f"🛠️ TEŞHİS BAĞLANTI HATASI: {str(e)}",
+            "Fiyat": "Hata",
+            "Durum": "Stokta Yok",
+            "Link": url
+        })
 
     return bulunanlar
 
@@ -271,7 +280,6 @@ def arama_yap(q: str, kategori: str = "Hepsi"):
         if kategori == "Hepsi" or ayarlar["kategori"] == kategori
     }
 
-    # Tarama hızı düşmesin diye işlem kapasitesi 8'e çıkarıldı
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         gelecek_sonuclar = [executor.submit(site_tara, ad, ayarlar, q_encoded) for ad, ayarlar in filtrelenmis_siteler.items()]
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
@@ -289,3 +297,4 @@ def arama_yap(q: str, kategori: str = "Hepsi"):
 
     sonuclar.sort(key=lambda x: fiyat_temizle(x["Fiyat"]))
     return {"sonuclar": sonuclar}
+    
