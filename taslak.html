@@ -1,3 +1,18 @@
+Check taslak.html on GitHub
+Read taslak.html from GitHub API
+Viewed content.md:1-7
+
+Sorunun sebebini GitHub'daki dosyana bakınca hemen buldum: Kodu kopyalarken **henüz yazılması bitmeden (veya fareyle seçerken yarım kalarak)** kopyalanmış; dosya `157. satırda` (`animation: hexGlow 1.`) yarıda kesilmiş. `<style>` etiketi hiç kapanmadığı için tarayıcı bembeyaz ekran göstermiş!
+
+Kodu hem çok daha **kompakt (kısa ve hızlı)** hale getirdim hem de eksiksiz hazırladım.
+
+> [!IMPORTANT]
+> **Lütfen Şuna Dikkat Et:**
+> 1. Aşağıdaki kod kutusunun en altındaki **`</html>`** satırının ekranda belirmesini bekle.
+> 2. Fareyle seçmek yerine, kod kutusunun **sağ üst köşesindeki Kopyala (iki üst üste kare) simgesine** bir kez tıkla.
+> 3. GitHub'da **`taslak.html`** dosyasının içini `Ctrl+A` $\rightarrow$ `Delete` ile tamamen silip yapıştır (`Ctrl+V`) ve kaydet.
+
+```html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -5,163 +20,508 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>KomponentBul</title>
 <style>
-    *, *::before, *::after {
-        box-sizing: border-box;
-    }
-
+    *, *::before, *::after { box-sizing: border-box; }
     :root {
-        --bg-color: #f4f7f6;
-        --card-bg: #ffffff;
-        --text-main: #1e293b;
-        --text-sub: #64748b;
-        --text-muted: #475569;
-        --border-color: #e2e8f0;
-        --table-border: #f1f5f9;
-        --th-bg: #f8fafc;
-        --row-hover: #f8fafc;
-        --cheapest-bg: #ecfdf5;
-        --cheapest-border: #10b981;
-        --input-bg: #ffffff;
-        --incele-bg: #1e293b;
-        --incele-text: #ffffff;
-        --perakende-bg: #dbeafe;
-        --perakende-text: #1d4ed8;
-        --toptan-bg: #f3e8ff;
-        --toptan-text: #7e22ce;
-        --logo-komponent: #0f172a;
-        --logo-line: #cbd5e1;
-        --logo-com-bg: #e2e8f0;
-        --logo-com-text: #475569;
+        --bg-color: #f4f7f6; --card-bg: #ffffff; --text-main: #1e293b; --text-sub: #64748b;
+        --text-muted: #475569; --border-color: #e2e8f0; --table-border: #f1f5f9; --th-bg: #f8fafc;
+        --row-hover: #f8fafc; --cheapest-bg: #ecfdf5; --cheapest-border: #10b981; --input-bg: #ffffff;
+        --incele-bg: #1e293b; --incele-text: #ffffff; --perakende-bg: #dbeafe; --perakende-text: #1d4ed8;
+        --toptan-bg: #f3e8ff; --toptan-text: #7e22ce; --logo-komponent: #0f172a;
+        --logo-com-bg: #e2e8f0; --logo-com-text: #475569;
     }
-
     body.dark-mode {
-        --bg-color: #0f172a;
-        --card-bg: #1e293b;
-        --text-main: #f1f5f9;
-        --text-sub: #94a3b8;
-        --text-muted: #cbd5e1;
-        --border-color: #334155;
-        --table-border: #334155;
-        --th-bg: #0f172a;
-        --row-hover: #26354d;
-        --cheapest-bg: rgba(16, 185, 129, 0.16);
-        --cheapest-border: #10b981;
-        --input-bg: #1e293b;
-        --incele-bg: #3b82f6;
-        --incele-text: #ffffff;
-        --perakende-bg: rgba(59, 130, 246, 0.22);
-        --perakende-text: #93c5fd;
-        --toptan-bg: rgba(168, 85, 247, 0.22);
-        --toptan-text: #d8b4fe;
-        --logo-komponent: #f8fafc;
-        --logo-line: #334155;
-        --logo-com-bg: rgba(59, 130, 246, 0.2);
-        --logo-com-text: #93c5fd;
+        --bg-color: #0f172a; --card-bg: #1e293b; --text-main: #f1f5f9; --text-sub: #94a3b8;
+        --text-muted: #cbd5e1; --border-color: #334155; --table-border: #334155; --th-bg: #0f172a;
+        --row-hover: #26354d; --cheapest-bg: rgba(16, 185, 129, 0.16); --cheapest-border: #10b981;
+        --input-bg: #1e293b; --incele-bg: #3b82f6; --incele-text: #ffffff;
+        --perakende-bg: rgba(59, 130, 246, 0.22); --perakende-text: #93c5fd;
+        --toptan-bg: rgba(168, 85, 247, 0.22); --toptan-text: #d8b4fe; --logo-komponent: #f8fafc;
+        --logo-com-bg: rgba(59, 130, 246, 0.2); --logo-com-text: #93c5fd;
     }
-
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: var(--bg-color);
-        color: var(--text-main);
-        margin: 0;
-        padding: 36px 24px;
-        transition: background-color 0.25s ease, color 0.25s ease;
-        overflow-x: hidden;
+        background-color: var(--bg-color); color: var(--text-main);
+        margin: 0; padding: 36px 24px; transition: background-color 0.25s, color 0.25s; overflow-x: hidden;
     }
 
-    /* --- ALENGİRLİ AÇILIŞ (BOOT) EKRANI --- */
+    /* AÇILIŞ (BOOT) EKRANI */
     #bootOverlay {
-        position: fixed;
-        inset: 0;
-        background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
-        color: #f8fafc;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        padding: 20px;
-        z-index: 9999;
-        transition: opacity 0.5s ease, visibility 0.5s ease;
+        position: fixed; inset: 0; background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+        color: #f8fafc; display: flex; flex-direction: column; justify-content: center; align-items: center;
+        padding: 20px; z-index: 9999; transition: opacity 0.5s ease, visibility 0.5s ease;
     }
-    #bootOverlay.hidden {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-    }
+    #bootOverlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
-    /* 4 Yönden Bacaklı Gerçek İşlemci (QFP CPU) */
     .chip-box {
-        position: relative;
-        width: 124px;
-        height: 124px;
-        background: linear-gradient(145deg, #0f172a, #1e293b);
-        border: 2px solid #3b82f6;
-        border-radius: 18px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+        position: relative; width: 124px; height: 124px;
+        background: linear-gradient(145deg, #0f172a, #1e293b); border: 2px solid #3b82f6; border-radius: 18px;
+        display: flex; justify-content: center; align-items: center;
         box-shadow: 0 0 35px rgba(59, 130, 246, 0.45), inset 0 0 20px rgba(16, 185, 129, 0.2);
-        margin-bottom: 34px;
-        animation: chipPulse 1.8s infinite ease-in-out;
+        margin-bottom: 34px; animation: chipPulse 1.8s infinite ease-in-out;
     }
-
     .chip-pin1-dot {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #fbbf24;
-        box-shadow: 0 0 6px #fbbf24;
+        position: absolute; top: 10px; left: 10px; width: 6px; height: 6px;
+        border-radius: 50%; background: #fbbf24; box-shadow: 0 0 6px #fbbf24;
     }
-
-    .chip-pins-left, .chip-pins-right {
-        position: absolute;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
+    .chip-pins-left, .chip-pins-right { position: absolute; display: flex; flex-direction: column; gap: 12px; }
     .chip-pins-left { left: -13px; }
     .chip-pins-right { right: -13px; }
-    .pin-h {
-        width: 11px;
-        height: 5px;
-        background: #60a5fa;
-        border-radius: 2px;
-        animation: pinSpark 0.9s infinite alternate;
-    }
+    .pin-h { width: 11px; height: 5px; background: #60a5fa; border-radius: 2px; animation: pinSpark 0.9s infinite alternate; }
 
-    .chip-pins-top, .chip-pins-bottom {
-        position: absolute;
-        display: flex;
-        flex-direction: row;
-        gap: 12px;
-    }
+    .chip-pins-top, .chip-pins-bottom { position: absolute; display: flex; flex-direction: row; gap: 12px; }
     .chip-pins-top { top: -13px; }
     .chip-pins-bottom { bottom: -13px; }
-    .pin-v {
-        width: 5px;
-        height: 11px;
-        background: #60a5fa;
-        border-radius: 2px;
-        animation: pinSpark 0.9s infinite alternate;
-    }
+    .pin-v { width: 5px; height: 11px; background: #60a5fa; border-radius: 2px; animation: pinSpark 0.9s infinite alternate; }
 
-    .pin-h:nth-child(1), .pin-v:nth-child(1) { animation-delay: 0.0s; }
     .pin-h:nth-child(2), .pin-v:nth-child(2) { animation-delay: 0.2s; }
     .pin-h:nth-child(3), .pin-v:nth-child(3) { animation-delay: 0.4s; }
     .pin-h:nth-child(4), .pin-v:nth-child(4) { animation-delay: 0.6s; }
 
-    .cpu-die-svg {
-        width: 108px;
-        height: 108px;
-        overflow: visible;
+    .cpu-die-svg { width: 108px; height: 108px; overflow: visible; }
+    .cpu-trace-flow { stroke-dasharray: 6 6; animation: traceFlow 1.2s linear infinite; }
+    .cpu-hex-core { transform-origin: center; animation: hexGlow 1.5s infinite alternate ease-in-out; }
+    .cpu-bolt { transform-origin: center; animation: boltPulse 0.9s infinite alternate ease-in-out; }
+
+    @keyframes traceFlow { to { stroke-dashoffset: -24; } }
+    @keyframes hexGlow {
+        0% { filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6)); }
+        100% { filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.95)); }
     }
-    .cpu-trace-flow {
-        stroke-dasharray: 6 6;
-        animation: traceFlow 1.2s linear infinite;
+    @keyframes boltPulse {
+        0% { transform: scale(0.92); filter: drop-shadow(0 0 4px #fbbf24); }
+        100% { transform: scale(1.08); filter: drop-shadow(0 0 12px #fbbf24); }
     }
-    .cpu-hex-core {
-        transform-origin: center;
-        animation: hexGlow 1.
+    @keyframes chipPulse {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 28px rgba(59, 130, 246, 0.4); }
+        50% { transform: scale(1.05); box-shadow: 0 0 50px rgba(16, 185, 129, 0.65); }
+    }
+    @keyframes pinSpark {
+        0% { background: #334155; box-shadow: none; }
+        50% { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
+        100% { background: #fbbf24; box-shadow: 0 0 10px #fbbf24; }
+    }
+
+    .boot-title {
+        font-size: 22px; font-weight: 700; margin-bottom: 10px; text-align: center;
+        background: linear-gradient(90deg, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .boot-status { font-size: 15px; color: #cbd5e1; min-height: 24px; margin-bottom: 20px; text-align: center; padding: 0 10px; }
+    .boot-progress-wrap { width: 320px; max-width: 85vw; height: 8px; background: #1e293b; border-radius: 99px; overflow: hidden; border: 1px solid #334155; }
+    .boot-progress-bar { height: 100%; width: 15%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 99px; transition: width 0.35s ease; }
+    .boot-sub-hint { margin-top: 12px; font-size: 12px; color: #64748b; text-align: center; }
+
+    .container { max-width: 920px; margin: 0 auto; position: relative; }
+    .top-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+    .theme-toggle {
+        background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color);
+        padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+        display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .theme-toggle:hover { border-color: #3b82f6; }
+
+    /* BAŞLIK LOGOSU */
+    .brand-header { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; user-select: none; }
+    .circuit-wing { display: flex; align-items: center; width: 90px; flex-shrink: 1; }
+    .circuit-wing svg { width: 100%; height: auto; }
+    .brand-logo-box {
+        display: inline-flex; align-items: center; gap: 12px; padding: 10px 22px;
+        background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.06); max-width: 100%;
+    }
+    .brand-chip-icon { width: 42px; height: 42px; flex-shrink: 0; }
+    .brand-text { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; color: var(--logo-komponent); display: flex; align-items: baseline; }
+    .brand-text .highlight { background: linear-gradient(135deg, #3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand-text .domain-badge {
+        font-size: 13px; font-weight: 700; background: var(--logo-com-bg); color: var(--logo-com-text);
+        padding: 2px 7px; border-radius: 6px; margin-left: 5px; transform: translateY(-4px);
+    }
+    p.sub { color: var(--text-sub); margin: 0 0 24px 0; text-align: center; font-weight: 500; font-size: 15px; line-height: 1.45; }
+
+    /* KATEGORİ & ARAMA */
+    .category-selection {
+        display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px 25px;
+        margin-bottom: 18px; background: var(--card-bg); padding: 14px 18px; border-radius: 10px; border: 1px solid var(--border-color);
+    }
+    .category-selection label { cursor: pointer; font-weight: 600; color: var(--text-muted); font-size: 15px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .category-selection input[type="radio"] { cursor: pointer; accent-color: #3b82f6; width: 17px; height: 17px; margin: 0; }
+
+    .search-box { display: flex; gap: 12px; margin-bottom: 22px; }
+    input[type="text"] {
+        flex: 1; min-width: 0; padding: 14px 18px; background-color: var(--input-bg); color: var(--text-main);
+        border: 2px solid var(--border-color); border-radius: 10px; font-size: 16px;
+    }
+    input[type="text"]:focus { border-color: #3b82f6; outline: none; }
+    button.search-btn {
+        padding: 14px 30px; background-color: #3b82f6; color: white; border: none;
+        border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; white-space: nowrap;
+    }
+    button.search-btn:hover { background-color: #2563eb; }
+
+    .loading-card {
+        display: none; background: var(--card-bg); border: 1px solid var(--border-color);
+        border-radius: 10px; padding: 22px 16px; margin-bottom: 20px; text-align: center;
+    }
+    .spinner-ring {
+        display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border-color);
+        border-top-color: #3b82f6; border-right-color: #10b981; border-radius: 50%;
+        animation: spin 0.8s linear infinite; margin-bottom: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-msg { color: #3b82f6; font-weight: 700; font-size: 15px; }
+
+    /* TABLO */
+    table {
+        width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px;
+        overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.08); border: 1px solid var(--border-color); display: none;
+    }
+    th, td { padding: 15px 16px; text-align: left; border-bottom: 1px solid var(--table-border); color: var(--text-main); vertical-align: middle; }
+    th { background-color: var(--th-bg); color: var(--text-muted); font-weight: 600; font-size: 14px; }
+    tr:hover { background-color: var(--row-hover); }
+    .en-ucuz { background-color: var(--cheapest-bg); }
+    .canli-etiket { color: #10b981; font-size: 12px; font-weight: bold; white-space: nowrap; }
+    .stok-yok-etiket { color: #ef4444; font-size: 12px; font-weight: bold; white-space: nowrap; }
+    td.col-fiyat, td.col-durum { white-space: nowrap; }
+    td.col-islem { white-space: nowrap; text-align: right; }
+
+    .kat-rozet { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .kat-perakende { background-color: var(--perakende-bg); color: var(--perakende-text); }
+    .kat-toptan { background-color: var(--toptan-bg); color: var(--toptan-text); }
+    a.incele-btn {
+        display: inline-block; padding: 8px 16px; background: var(--incele-bg); color: var(--incele-text);
+        border-radius: 6px; font-size: 13px; text-decoration: none; font-weight: 600;
+    }
+
+    /* TABLET (641px - 900px) */
+    @media (max-width: 900px) {
+        body { padding: 24px 16px; }
+        .circuit-wing { width: 55px; }
+        .brand-text { font-size: 26px; }
+        th, td { padding: 12px; font-size: 14px; }
+    }
+
+    /* TELEFON / MOBİL (≤ 640px) */
+    @media (max-width: 640px) {
+        body { padding: 14px 12px 28px 12px; }
+        .circuit-wing { display: none; }
+        .brand-logo-box { padding: 8px 16px; gap: 10px; border-radius: 12px; }
+        .brand-chip-icon { width: 34px; height: 34px; }
+        .brand-text { font-size: 22px; }
+        .brand-text .domain-badge { font-size: 11px; padding: 2px 5px; }
+        p.sub { font-size: 13.5px; margin-bottom: 16px; }
+        .category-selection { padding: 10px 12px; gap: 10px 14px; margin-bottom: 14px; }
+        .category-selection label { font-size: 13.5px; gap: 6px; }
+        .search-box { flex-direction: column; gap: 10px; margin-bottom: 18px; }
+        input[type="text"], button.search-btn { width: 100%; padding: 13px 14px; font-size: 16px; }
+
+        table { background: transparent; border: none; box-shadow: none; overflow: visible; }
+        thead { display: none; }
+        tbody { display: flex; flex-direction: column; gap: 12px; }
+        tbody tr {
+            display: grid; grid-template-columns: 1fr auto;
+            grid-template-areas: "tedarikci durum" "urun urun" "fiyat islem";
+            gap: 8px 10px; align-items: center; background: var(--card-bg);
+            border: 1px solid var(--border-color); border-radius: 12px; padding: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        tbody tr.en-ucuz { background: var(--cheapest-bg); border: 1.5px solid var(--cheapest-border); }
+        tbody tr.empty-row { display: block; text-align: center; padding: 20px; }
+        tbody td { padding: 0; border: none; }
+        td.col-tedarikci { grid-area: tedarikci; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 15px; }
+        td.col-tedarikci br { display: none; }
+        td.col-tedarikci .kat-rozet { margin-top: 0; }
+        td.col-durum { grid-area: durum; text-align: right; }
+        td.col-urun {
+            grid-area: urun; font-size: 14px; line-height: 1.45; padding: 8px 0;
+            border-top: 1px dashed var(--table-border); border-bottom: 1px dashed var(--table-border); word-break: break-word;
+        }
+        td.col-fiyat { grid-area: fiyat; font-size: 18px; color: #10b981; }
+        td.col-islem { grid-area: islem; text-align: right; }
+        td.col-islem a.incele-btn { padding: 9px 18px; font-size: 13.5px; border-radius: 8px; }
+    }
+</style>
+</head>
+<body>
+
+<div id="bootOverlay">
+    <div class="chip-box">
+        <div class="chip-pin1-dot"></div>
+        <div class="chip-pins-top"><div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div></div>
+        <div class="chip-pins-bottom"><div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div></div>
+        <div class="chip-pins-left"><div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div></div>
+        <div class="chip-pins-right"><div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div></div>
+
+        <svg class="cpu-die-svg" viewBox="0 0 100 100" fill="none">
+            <defs>
+                <linearGradient id="coreHexGrad" x1="25" y1="25" x2="75" y2="75" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#1e3a8a"/><stop offset="50%" stop-color="#0f172a"/><stop offset="100%" stop-color="#064e3b"/>
+                </linearGradient>
+                <linearGradient id="hexStrokeGrad" x1="20" y1="20" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#38bdf8"/><stop offset="50%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#10b981"/>
+                </linearGradient>
+                <linearGradient id="boltGrad" x1="40" y1="28" x2="60" y2="72" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#fde047"/><stop offset="100%" stop-color="#f59e0b"/>
+                </linearGradient>
+            </defs>
+            <rect x="8" y="8" width="84" height="84" rx="10" stroke="#1e293b" stroke-width="1.5"/>
+            <g stroke="#334155" stroke-width="1.8" stroke-linecap="round">
+                <path d="M35 8V22L42 29M50 8V24M65 8V22L58 29M35 92V78L42 71M50 92V76M65 92V78L58 71M8 35H22L29 42M8 50H24M8 65H22L29 58M92 35H78L71 42M92 50H76M92 65H78L71 58"/>
+            </g>
+            <g class="cpu-trace-flow" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round">
+                <path d="M50 8V24M50 92V76M8 50H24M92 50H76"/>
+            </g>
+            <g class="cpu-trace-flow" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" opacity="0.85">
+                <path d="M35 8V22L42 29M65 92V78L58 71M8 65H22L29 58M92 35H78L71 42"/>
+            </g>
+            <circle cx="20" cy="20" r="2.5" fill="#fbbf24" opacity="0.8"/>
+            <circle cx="80" cy="20" r="2.5" fill="#38bdf8" opacity="0.8"/>
+            <circle cx="20" cy="80" r="2.5" fill="#38bdf8" opacity="0.8"/>
+            <circle cx="80" cy="80" r="2.5" fill="#fbbf24" opacity="0.8"/>
+            <g class="cpu-hex-core">
+                <polygon points="50,21 75,35.5 75,64.5 50,79 25,64.5 25,35.5" fill="url(#coreHexGrad)" stroke="url(#hexStrokeGrad)" stroke-width="2.5" stroke-linejoin="round"/>
+                <polygon points="50,26 70,38 70,62 50,74 30,62 30,38" fill="none" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="3 2" opacity="0.6"/>
+            </g>
+            <path class="cpu-bolt" d="M54 31 L39 52 H49 L46 69 L61 48 H51 L54 31 Z" fill="url(#boltGrad)" stroke="#fef08a" stroke-width="0.8" stroke-linejoin="round"/>
+        </svg>
+    </div>
+    <div class="boot-title">KomponentBul Sistem Başlatılıyor</div>
+    <div class="boot-status" id="bootStatusText">⚡ Güç kaynağı 5V'a sabitleniyor...</div>
+    <div class="boot-progress-wrap"><div class="boot-progress-bar" id="bootProgressBar"></div></div>
+    <div class="boot-sub-hint" id="bootSubHint">Tedarikçi veri yolları kontrol ediliyor</div>
+</div>
+
+<div class="container">
+    <div class="top-bar">
+        <button class="theme-toggle" id="themeBtn" onclick="temaDegistir()">🌙 Gece Modu</button>
+    </div>
+
+    <div class="brand-header">
+        <div class="circuit-wing left">
+            <svg width="90" height="32" viewBox="0 0 90 32" fill="none">
+                <path d="M90 16H35L22 6H8" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+                <path d="M90 22H50L40 28H20" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+                <circle cx="8" cy="6" r="3.5" fill="#3b82f6"/><circle cx="20" cy="28" r="2.5" fill="#10b981"/>
+            </svg>
+        </div>
+
+        <div class="brand-logo-box">
+            <svg class="brand-chip-icon" viewBox="0 0 48 48" fill="none">
+                <path d="M15 3V9M21 3V9M27 3V9M33 3V9M15 39V45M21 39V45M27 39V45M33 39V45M3 15H9M3 21H9M3 27H9M3 33H9M39 15H45M39 21H45M39 27H45M39 33H45" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round"/>
+                <rect x="8" y="8" width="32" height="32" rx="6" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="12" cy="12" r="1.5" fill="#fbbf24"/>
+                <polygon points="24,13 33.5,18.5 33.5,29.5 24,35 14.5,29.5 14.5,18.5" fill="#1e293b" stroke="#10b981" stroke-width="1.8"/>
+                <path d="M25.8 16.5 L19.5 25 H23.8 L22.2 31.5 L28.5 23 H24.2 L25.8 16.5 Z" fill="#fbbf24"/>
+            </svg>
+            <div class="brand-text">Komponent<span class="highlight">Bul</span><span class="domain-badge">.com</span></div>
+        </div>
+
+        <div class="circuit-wing right">
+            <svg width="90" height="32" viewBox="0 0 90 32" fill="none">
+                <path d="M0 16H55L68 6H82" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+                <path d="M0 22H40L50 28H70" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+                <circle cx="82" cy="6" r="3.5" fill="#3b82f6"/><circle cx="70" cy="28" r="2.5" fill="#10b981"/>
+            </svg>
+        </div>
+    </div>
+
+    <p class="sub">Elektronik parça kodunu gir, tüm kaynaklardaki fiyatları anında karşılaştır.</p>
+
+    <div class="category-selection">
+        <label><input type="radio" name="kategori" value="Hepsi" checked onchange="kategoriDegisti()"> Tüm Siteler</label>
+        <label><input type="radio" name="kategori" value="Perakende" onchange="kategoriDegisti()"> Perakende Satış</label>
+        <label><input type="radio" name="kategori" value="Toptan" onchange="kategoriDegisti()"> Toptan Satış</label>
+    </div>
+
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Parça kodu (örn. LM358, BC547, STM32)">
+        <button class="search-btn" onclick="ara()">Sorgula</button>
+    </div>
+
+    <div class="loading-card" id="loadingCard">
+        <div class="spinner-ring"></div>
+        <div class="loading-msg" id="loadingText">🔌 Tedarikçi sunucularına jumper kablolar bağlanıyor...</div>
+    </div>
+
+    <table id="resultsTable">
+        <thead>
+            <tr><th>Tedarikçi</th><th>Ürün</th><th>Fiyat</th><th>Durum</th><th></th></tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+    </table>
+</div>
+
+<script>
+const API_BASE = window.location.hostname.includes('onrender.com') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? '' : 'https://komponentbul.onrender.com';
+
+let tumSonuclar = [];
+let sonArananKod = "";
+let aramaMesajTimer = null;
+
+const ACILIS_MESAJLARI = [
+    "⚡ Uygulama başlatılıyor, güç kaynağı 5V'a sabitleniyor...",
+    "🔌 Jumper kabloları breadboard üzerine bağlanıyor...",
+    "🔋 Kondansatörler şarj ediliyor, parazitler filtreleniyor...",
+    "🔥 Lehim havyası 350°C'ye ısıtılıyor...",
+    "📟 Multimetre ile 11 tedarikçi hattı ölçülüyor..."
+];
+
+const ARAMA_MESAJLARI = [
+    "🔌 Tedarikçi sunucularına jumper kablolar bağlanıyor...",
+    "🔎 Perakende ve toptan raflarındaki stoklar sayılıyor...",
+    "💱 Dolar ve Euro fiyatlar güncel kurla TL'ye çevriliyor...",
+    "📊 Multimetre en ucuz fiyatları küçükten büyüğe diziyor..."
+];
+
+function temaUygula(karanlikMi) {
+    const btn = document.getElementById('themeBtn');
+    if (karanlikMi) {
+        document.body.classList.add('dark-mode');
+        btn.innerHTML = '☀️ Gündüz Modu';
+    } else {
+        document.body.classList.remove('dark-mode');
+        btn.innerHTML = '🌙 Gece Modu';
+    }
+}
+
+function temaDegistir() {
+    const suAnKaranlik = document.body.classList.contains('dark-mode');
+    localStorage.setItem('komponentbul_tema', suAnKaranlik ? 'light' : 'dark');
+    temaUygula(!suAnKaranlik);
+}
+
+async function acilisAnimasyonuBaslat() {
+    const overlay = document.getElementById('bootOverlay');
+    const statusText = document.getElementById('bootStatusText');
+    const progressBar = document.getElementById('bootProgressBar');
+
+    fetch(`${API_BASE}/ping`, { mode: 'cors' }).catch(() => {});
+
+    let adim = 0;
+    let yuzde = 20;
+    const mesajDongusu = setInterval(() => {
+        adim = (adim + 1) % ACILIS_MESAJLARI.length;
+        statusText.textContent = ACILIS_MESAJLARI[adim];
+        if (yuzde < 90) {
+            yuzde += 25;
+            progressBar.style.width = yuzde + "%";
+        }
+    }, 500);
+
+    await new Promise(res => setTimeout(res, 1700));
+    clearInterval(mesajDongusu);
+    statusText.textContent = "✅ Kısa devre yok! KomponentBul kullanıma hazır.";
+    progressBar.style.width = "100%";
+
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+        if (window.innerWidth > 640) {
+            document.getElementById('searchInput').focus();
+        }
+    }, 350);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('komponentbul_tema') === 'dark') {
+        temaUygula(true);
+    }
+    acilisAnimasyonuBaslat();
+});
+
+function tabloyuCiz(veriler) {
+    const secilenKategori = document.querySelector('input[name="kategori"]:checked').value;
+    const table = document.getElementById('resultsTable');
+    const tbody = document.getElementById('resultsBody');
+    tbody.innerHTML = '';
+
+    const filtrelenmis = veriler.filter(item => {
+        if (secilenKategori === "Hepsi") return true;
+        const itemKat = (item.Kategori || item.kategori || "").toLowerCase();
+        return itemKat === secilenKategori.toLowerCase();
+    });
+
+    if (filtrelenmis.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5" style="text-align: center;">Bu kategoride sonuç bulunamadı.</td></tr>';
+        table.style.display = 'table';
+        return;
+    }
+
+    filtrelenmis.forEach((item, index) => {
+        const tukendiMi = (item.Durum === "Tükendi" || item.Durum === "Stokta Yok");
+        const durumHtml = tukendiMi
+            ? '<span class="stok-yok-etiket">● Stokta Yok</span>'
+            : '<span class="canli-etiket">● Canlı Veri</span>';
+
+        const kat = item.Kategori || item.kategori || "Perakende";
+        const rozetClass = kat.toLowerCase() === "toptan" ? "kat-toptan" : "kat-perakende";
+        const rozetHtml = `<br><span class="kat-rozet ${rozetClass}">${kat}</span>`;
+        const satirClass = (index === 0 && !tukendiMi) ? 'en-ucuz' : '';
+
+        tbody.innerHTML += `
+            <tr class="${satirClass}">
+                <td class="col-tedarikci"><strong>${item.Tedarikci}</strong>${rozetHtml}</td>
+                <td class="col-urun">${item.Urun}</td>
+                <td class="col-fiyat"><strong>${item.Fiyat}</strong></td>
+                <td class="col-durum">${durumHtml}</td>
+                <td class="col-islem"><a class="incele-btn" href="${item.Link}" target="_blank">İncele</a></td>
+            </tr>
+        `;
+    });
+
+    table.style.display = 'table';
+}
+
+function kategoriDegisti() {
+    const girilenKod = document.getElementById('searchInput').value.trim();
+    if (tumSonuclar.length > 0 && girilenKod === sonArananKod) {
+        tabloyuCiz(tumSonuclar);
+    } else if (girilenKod) {
+        ara();
+    }
+}
+
+async function ara() {
+    const kod = document.getElementById('searchInput').value.trim();
+    if (!kod) { alert("Lütfen bir parça kodu girin."); return; }
+
+    const loadingCard = document.getElementById('loadingCard');
+    const loadingText = document.getElementById('loadingText');
+    const table = document.getElementById('resultsTable');
+    const tbody = document.getElementById('resultsBody');
+
+    let msgIndex = 0;
+    loadingText.textContent = ARAMA_MESAJLARI[0];
+    loadingCard.style.display = 'block';
+    table.style.display = 'none';
+    tbody.innerHTML = '';
+
+    if (aramaMesajTimer) clearInterval(aramaMesajTimer);
+    aramaMesajTimer = setInterval(() => {
+        msgIndex = (msgIndex + 1) % ARAMA_MESAJLARI.length;
+        loadingText.textContent = ARAMA_MESAJLARI[msgIndex];
+    }, 1400);
+
+    try {
+        const response = await fetch(`${API_BASE}/arama?q=${encodeURIComponent(kod)}&kategori=Hepsi`);
+        if (!response.ok) throw new Error("Sunucu yanıt vermedi.");
+        const data = await response.json();
+
+        clearInterval(aramaMesajTimer);
+        loadingCard.style.display = 'none';
+        tumSonuclar = data.sonuclar || [];
+        sonArananKod = kod;
+        tabloyuCiz(tumSonuclar);
+    } catch (error) {
+        clearInterval(aramaMesajTimer);
+        loadingCard.style.display = 'none';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5" style="text-align: center; color: #ef4444;">Bağlantı koptu veya sunucu uyanıyor, lütfen tekrar Sorgula\'ya basın.</td></tr>';
+        table.style.display = 'table';
+    }
+}
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') ara();
+});
+</script>
+</body>
+</html>
+```
