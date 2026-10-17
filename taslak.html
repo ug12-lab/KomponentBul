@@ -2,9 +2,13 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>KomponentBul</title>
 <style>
+    *, *::before, *::after {
+        box-sizing: border-box;
+    }
+
     :root {
         --bg-color: #f4f7f6;
         --card-bg: #ffffff;
@@ -16,6 +20,7 @@
         --th-bg: #f8fafc;
         --row-hover: #f8fafc;
         --cheapest-bg: #ecfdf5;
+        --cheapest-border: #10b981;
         --input-bg: #ffffff;
         --incele-bg: #1e293b;
         --incele-text: #ffffff;
@@ -40,6 +45,7 @@
         --th-bg: #0f172a;
         --row-hover: #26354d;
         --cheapest-bg: rgba(16, 185, 129, 0.16);
+        --cheapest-border: #10b981;
         --input-bg: #1e293b;
         --incele-bg: #3b82f6;
         --incele-text: #ffffff;
@@ -58,8 +64,9 @@
         background-color: var(--bg-color);
         color: var(--text-main);
         margin: 0;
-        padding: 40px;
+        padding: 36px 24px;
         transition: background-color 0.25s ease, color 0.25s ease;
+        overflow-x: hidden;
     }
 
     /* --- ALENGİRLİ AÇILIŞ (BOOT) EKRANI --- */
@@ -72,6 +79,7 @@
         flex-direction: column;
         justify-content: center;
         align-items: center;
+        padding: 20px;
         z-index: 9999;
         transition: opacity 0.5s ease, visibility 0.5s ease;
     }
@@ -81,66 +89,114 @@
         pointer-events: none;
     }
 
+    /* 4 Yönden Bacaklı Gerçek İşlemci (QFP CPU) */
     .chip-box {
         position: relative;
-        width: 96px;
-        height: 96px;
-        background: #0f172a;
+        width: 124px;
+        height: 124px;
+        background: linear-gradient(145deg, #0f172a, #1e293b);
         border: 2px solid #3b82f6;
-        border-radius: 16px;
+        border-radius: 18px;
         display: flex;
         justify-content: center;
         align-items: center;
-        box-shadow: 0 0 30px rgba(59, 130, 246, 0.4), inset 0 0 15px rgba(59, 130, 246, 0.25);
-        margin-bottom: 28px;
-        animation: chipPulse 1.6s infinite ease-in-out;
+        box-shadow: 0 0 35px rgba(59, 130, 246, 0.45), inset 0 0 20px rgba(16, 185, 129, 0.2);
+        margin-bottom: 34px;
+        animation: chipPulse 1.8s infinite ease-in-out;
     }
-    .chip-core {
-        width: 48px;
-        height: 48px;
-        background: linear-gradient(135deg, #3b82f6, #10b981);
-        border-radius: 8px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-weight: 800;
-        font-size: 14px;
-        letter-spacing: 1px;
-        color: #ffffff;
-        box-shadow: 0 0 15px rgba(16, 185, 129, 0.6);
+
+    .chip-pin1-dot {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #fbbf24;
+        box-shadow: 0 0 6px #fbbf24;
     }
+
     .chip-pins-left, .chip-pins-right {
         position: absolute;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
     }
-    .chip-pins-left { left: -12px; }
-    .chip-pins-right { right: -12px; }
-    .pin {
-        width: 10px;
-        height: 4px;
+    .chip-pins-left { left: -13px; }
+    .chip-pins-right { right: -13px; }
+    .pin-h {
+        width: 11px;
+        height: 5px;
         background: #60a5fa;
         border-radius: 2px;
-        animation: pinSpark 1s infinite alternate;
+        animation: pinSpark 0.9s infinite alternate;
     }
-    .pin:nth-child(2) { animation-delay: 0.2s; }
-    .pin:nth-child(3) { animation-delay: 0.4s; }
-    .pin:nth-child(4) { animation-delay: 0.6s; }
 
+    .chip-pins-top, .chip-pins-bottom {
+        position: absolute;
+        display: flex;
+        flex-direction: row;
+        gap: 12px;
+    }
+    .chip-pins-top { top: -13px; }
+    .chip-pins-bottom { bottom: -13px; }
+    .pin-v {
+        width: 5px;
+        height: 11px;
+        background: #60a5fa;
+        border-radius: 2px;
+        animation: pinSpark 0.9s infinite alternate;
+    }
+
+    .pin-h:nth-child(1), .pin-v:nth-child(1) { animation-delay: 0.0s; }
+    .pin-h:nth-child(2), .pin-v:nth-child(2) { animation-delay: 0.2s; }
+    .pin-h:nth-child(3), .pin-v:nth-child(3) { animation-delay: 0.4s; }
+    .pin-h:nth-child(4), .pin-v:nth-child(4) { animation-delay: 0.6s; }
+
+    .cpu-die-svg {
+        width: 108px;
+        height: 108px;
+        overflow: visible;
+    }
+    .cpu-trace-flow {
+        stroke-dasharray: 6 6;
+        animation: traceFlow 1.2s linear infinite;
+    }
+    .cpu-hex-core {
+        transform-origin: center;
+        animation: hexGlow 1.5s infinite alternate ease-in-out;
+    }
+    .cpu-bolt {
+        transform-origin: center;
+        animation: boltPulse 0.9s infinite alternate ease-in-out;
+    }
+
+    @keyframes traceFlow {
+        to { stroke-dashoffset: -24; }
+    }
+    @keyframes hexGlow {
+        0% { filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6)); }
+        100% { filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.95)); }
+    }
+    @keyframes boltPulse {
+        0% { transform: scale(0.92); filter: drop-shadow(0 0 4px #fbbf24); }
+        100% { transform: scale(1.08); filter: drop-shadow(0 0 12px #fbbf24); }
+    }
     @keyframes chipPulse {
-        0%, 100% { transform: scale(1); box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); }
-        50% { transform: scale(1.06); box-shadow: 0 0 45px rgba(16, 185, 129, 0.65); }
+        0%, 100% { transform: scale(1); box-shadow: 0 0 28px rgba(59, 130, 246, 0.4); }
+        50% { transform: scale(1.05); box-shadow: 0 0 50px rgba(16, 185, 129, 0.65); }
     }
     @keyframes pinSpark {
         0% { background: #334155; box-shadow: none; }
-        100% { background: #34d399; box-shadow: 0 0 8px #34d399; }
+        50% { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
+        100% { background: #fbbf24; box-shadow: 0 0 10px #fbbf24; }
     }
 
     .boot-title {
         font-size: 22px;
         font-weight: 700;
         margin-bottom: 10px;
+        text-align: center;
         background: linear-gradient(90deg, #60a5fa, #34d399);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -151,7 +207,7 @@
         min-height: 24px;
         margin-bottom: 20px;
         text-align: center;
-        padding: 0 20px;
+        padding: 0 10px;
     }
     .boot-progress-wrap {
         width: 320px;
@@ -174,15 +230,16 @@
         margin-top: 12px;
         font-size: 12px;
         color: #64748b;
+        text-align: center;
     }
 
-    .container { max-width: 900px; margin: 0 auto; position: relative; }
+    .container { max-width: 920px; margin: 0 auto; position: relative; }
 
     /* Gece / Gündüz Modu Butonu */
     .top-bar {
         display: flex;
         justify-content: flex-end;
-        margin-bottom: 5px;
+        margin-bottom: 8px;
     }
     .theme-toggle {
         background: var(--card-bg);
@@ -201,12 +258,12 @@
     }
     .theme-toggle:hover { border-color: #3b82f6; }
 
-    /* --- YENİ VEKTÖREL (ŞEFFAF) DEVRE LOGOSU --- */
+    /* --- VEKTÖREL (ŞEFFAF) DEVRE LOGOSU --- */
     .brand-header {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 16px;
+        gap: 14px;
         margin-bottom: 12px;
         user-select: none;
     }
@@ -214,6 +271,11 @@
         display: flex;
         align-items: center;
         width: 90px;
+        flex-shrink: 1;
+    }
+    .circuit-wing svg {
+        width: 100%;
+        height: auto;
     }
     .circuit-wing.left { justify-content: flex-end; }
     .circuit-wing.right { justify-content: flex-start; }
@@ -228,14 +290,15 @@
         border-radius: 14px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
         transition: background-color 0.25s ease, border-color 0.25s ease;
+        max-width: 100%;
     }
     body.dark-mode .brand-logo-box {
         box-shadow: 0 4px 20px rgba(59, 130, 246, 0.12);
     }
 
     .brand-chip-icon {
-        width: 38px;
-        height: 38px;
+        width: 42px;
+        height: 42px;
         flex-shrink: 0;
     }
 
@@ -246,6 +309,7 @@
         color: var(--logo-komponent);
         display: flex;
         align-items: baseline;
+        flex-wrap: nowrap;
     }
     .brand-text .highlight {
         background: linear-gradient(135deg, #3b82f6, #10b981);
@@ -263,57 +327,83 @@
         transform: translateY(-4px);
     }
 
-    @media (max-width: 600px) {
-        .circuit-wing { display: none; }
-        .brand-text { font-size: 24px; }
+    p.sub {
+        color: var(--text-sub);
+        margin-top: 0;
+        text-align: center;
+        margin-bottom: 24px;
+        font-weight: 500;
+        font-size: 15px;
+        line-height: 1.45;
+        padding: 0 8px;
     }
-
-    p.sub { color: var(--text-sub); margin-top: 0; text-align: center; margin-bottom: 28px; font-weight: 500; }
 
     /* Kategori Seçim Alanı */
     .category-selection {
         display: flex;
         justify-content: center;
-        gap: 25px;
-        margin-bottom: 20px;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 14px 25px;
+        margin-bottom: 18px;
         background: var(--card-bg);
-        padding: 15px;
-        border-radius: 8px;
+        padding: 14px 18px;
+        border-radius: 10px;
         border: 1px solid var(--border-color);
         box-shadow: 0 2px 4px rgba(0,0,0,0.03);
         transition: background-color 0.25s ease, border-color 0.25s ease;
     }
     .category-selection label {
         cursor: pointer;
-        font-weight: 500;
+        font-weight: 600;
         color: var(--text-muted);
         font-size: 15px;
         display: flex;
         align-items: center;
         gap: 8px;
         transition: color 0.2s;
+        white-space: nowrap;
     }
     .category-selection label:hover { color: #3b82f6; }
-    .category-selection input[type="radio"] { cursor: pointer; accent-color: #3b82f6; width: 16px; height: 16px; }
+    .category-selection input[type="radio"] {
+        cursor: pointer;
+        accent-color: #3b82f6;
+        width: 17px;
+        height: 17px;
+        margin: 0;
+    }
 
-    .search-box { display: flex; gap: 12px; margin-bottom: 25px; }
+    /* Arama Kutusu */
+    .search-box {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
     input[type="text"] {
         flex: 1;
+        min-width: 0;
         padding: 14px 18px;
         background-color: var(--input-bg);
         color: var(--text-main);
         border: 2px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 16px;
+        border-radius: 10px;
+        font-size: 16px; /* 16px telefonlarda otomatik zoom yapmasını engeller */
         transition: background-color 0.25s ease, color 0.25s ease, border-color 0.2s;
     }
     input[type="text"]::placeholder { color: var(--text-sub); }
     input[type="text"]:focus { border-color: #3b82f6; outline: none; }
 
     button.search-btn {
-        padding: 14px 30px; background-color: #3b82f6; color: white;
-        border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
-        cursor: pointer; transition: background-color 0.2s;
+        padding: 14px 30px;
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        white-space: nowrap;
     }
     button.search-btn:hover { background-color: #2563eb; }
 
@@ -323,7 +413,7 @@
         background: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 10px;
-        padding: 24px;
+        padding: 22px 16px;
         margin-bottom: 20px;
         text-align: center;
         box-shadow: 0 4px 12px rgba(0,0,0,0.06);
@@ -344,21 +434,42 @@
         color: #3b82f6;
         font-weight: 700;
         font-size: 15px;
+        line-height: 1.4;
     }
 
+    /* --- SONUÇ TABLOSU (BİLGİSAYAR & TABLET) --- */
     table {
-        width: 100%; border-collapse: collapse; background: var(--card-bg);
-        border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--card-bg);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.08);
         border: 1px solid var(--border-color);
         display: none;
         transition: background-color 0.25s ease;
     }
-    th, td { padding: 16px; text-align: left; border-bottom: 1px solid var(--table-border); color: var(--text-main); }
-    th { background-color: var(--th-bg); color: var(--text-muted); font-weight: 600; font-size: 14px; }
+    th, td {
+        padding: 15px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--table-border);
+        color: var(--text-main);
+        vertical-align: middle;
+    }
+    th {
+        background-color: var(--th-bg);
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 14px;
+    }
     tr:hover { background-color: var(--row-hover); }
     .en-ucuz { background-color: var(--cheapest-bg); }
-    .canli-etiket { color: #10b981; font-size: 12px; font-weight: bold; }
-    .stok-yok-etiket { color: #ef4444; font-size: 12px; font-weight: bold; }
+    .canli-etiket { color: #10b981; font-size: 12px; font-weight: bold; white-space: nowrap; }
+    .stok-yok-etiket { color: #ef4444; font-size: 12px; font-weight: bold; white-space: nowrap; }
+
+    td.col-fiyat { white-space: nowrap; font-size: 15px; }
+    td.col-durum { white-space: nowrap; }
+    td.col-islem { white-space: nowrap; text-align: right; }
 
     .kat-rozet {
         display: inline-block;
@@ -372,26 +483,258 @@
     .kat-toptan { background-color: var(--toptan-bg); color: var(--toptan-text); }
 
     a.incele-btn {
-        display: inline-block; padding: 8px 16px; background: var(--incele-bg);
-        color: var(--incele-text); border-radius: 6px; font-size: 13px; text-decoration: none;
-        font-weight: 500; transition: opacity 0.2s;
+        display: inline-block;
+        padding: 8px 16px;
+        background: var(--incele-bg);
+        color: var(--incele-text);
+        border-radius: 6px;
+        font-size: 13px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: opacity 0.2s;
     }
     a.incele-btn:hover { opacity: 0.9; }
+
+    /* =========================================================
+       TABLET UYUMLULUĞU (641px - 900px)
+       ========================================================= */
+    @media (max-width: 900px) {
+        body { padding: 24px 16px; }
+        .circuit-wing { width: 55px; }
+        .brand-text { font-size: 26px; }
+        th, td { padding: 12px 12px; font-size: 14px; }
+    }
+
+    /* =========================================================
+       TELEFON (MOBİL) UYUMLULUĞU (≤ 640px) - KART GÖRÜNÜMÜ
+       ========================================================= */
+    @media (max-width: 640px) {
+        body { padding: 14px 12px 28px 12px; }
+
+        .top-bar { margin-bottom: 10px; }
+        .theme-toggle { padding: 7px 12px; font-size: 12px; }
+
+        .circuit-wing { display: none; }
+        .brand-logo-box {
+            padding: 8px 16px;
+            gap: 10px;
+            border-radius: 12px;
+        }
+        .brand-chip-icon { width: 34px; height: 34px; }
+        .brand-text { font-size: 22px; }
+        .brand-text .domain-badge { font-size: 11px; padding: 2px 5px; }
+
+        p.sub { font-size: 13.5px; margin-bottom: 16px; }
+
+        /* Kategori seçimi telefonda yan yana kompakt butonlar gibi durur */
+        .category-selection {
+            padding: 10px 12px;
+            gap: 10px 14px;
+            margin-bottom: 14px;
+        }
+        .category-selection label { font-size: 13.5px; gap: 6px; }
+
+        /* Arama kutusu ve Sorgula butonu telefonda tam genişlik alt alta */
+        .search-box {
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 13px 14px;
+            font-size: 16px;
+        }
+        button.search-btn {
+            width: 100%;
+            padding: 13px;
+            font-size: 16px;
+        }
+
+        /* Tabloyu Telefonda Otomatik Olarak Ürün Kartlarına Dönüştür */
+        table {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            overflow: visible;
+        }
+        thead {
+            display: none; /* Başlık satırını telefonda gizle */
+        }
+        tbody {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        tbody tr {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-areas:
+                "tedarikci durum"
+                "urun urun"
+                "fiyat islem";
+            gap: 8px 10px;
+            align-items: center;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        tbody tr.en-ucuz {
+            background: var(--cheapest-bg);
+            border: 1.5px solid var(--cheapest-border);
+        }
+        tbody tr.empty-row {
+            display: block;
+            text-align: center;
+            padding: 20px;
+        }
+        tbody td {
+            padding: 0;
+            border: none;
+        }
+        td.col-tedarikci {
+            grid-area: tedarikci;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 15px;
+        }
+        td.col-tedarikci br {
+            display: none; /* Telefonda rozet tedarikçi adının hemen yanında dursun */
+        }
+        td.col-tedarikci .kat-rozet {
+            margin-top: 0;
+        }
+        td.col-durum {
+            grid-area: durum;
+            text-align: right;
+        }
+        td.col-urun {
+            grid-area: urun;
+            font-size: 14px;
+            line-height: 1.45;
+            padding: 8px 0;
+            border-top: 1px dashed var(--table-border);
+            border-bottom: 1px dashed var(--table-border);
+            word-break: break-word;
+        }
+        td.col-fiyat {
+            grid-area: fiyat;
+            font-size: 18px;
+            color: #10b981;
+        }
+        td.col-islem {
+            grid-area: islem;
+            text-align: right;
+        }
+        td.col-islem a.incele-btn {
+            padding: 9px 18px;
+            font-size: 13.5px;
+            border-radius: 8px;
+        }
+
+        /* Açılış ekranı mobil boyutlandırma */
+        .chip-box { width: 108px; height: 108px; margin-bottom: 28px; }
+        .cpu-die-svg { width: 94px; height: 94px; }
+        .boot-title { font-size: 19px; }
+        .boot-status { font-size: 14px; }
+    }
 </style>
 </head>
 <body>
 
-<!-- ALENGİRLİ AÇILIŞ / UYANDIRMA EKRANI -->
+<!-- ALENGİRLİ AÇILIŞ / UYANDIRMA EKRANI (4 YÖNLÜ CPU + ENERJİ ÇEKİRDEĞİ) -->
 <div id="bootOverlay">
     <div class="chip-box">
+        <div class="chip-pin1-dot"></div>
+
+        <!-- 4 Yönden Bacaklar (Top / Bottom / Left / Right) -->
+        <div class="chip-pins-top">
+            <div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div>
+        </div>
+        <div class="chip-pins-bottom">
+            <div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div><div class="pin-v"></div>
+        </div>
         <div class="chip-pins-left">
-            <div class="pin"></div><div class="pin"></div><div class="pin"></div><div class="pin"></div>
+            <div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div>
         </div>
-        <div class="chip-core">IC-11</div>
         <div class="chip-pins-right">
-            <div class="pin"></div><div class="pin"></div><div class="pin"></div><div class="pin"></div>
+            <div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div><div class="pin-h"></div>
         </div>
+
+        <!-- İşlemci Çekirdeği (Altın/Mavi Veri Yolları + Altıgen Şimşek Çekirdek) -->
+        <svg class="cpu-die-svg" viewBox="0 0 100 100" fill="none">
+            <defs>
+                <linearGradient id="coreHexGrad" x1="25" y1="25" x2="75" y2="75" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#1e3a8a"/>
+                    <stop offset="50%" stop-color="#0f172a"/>
+                    <stop offset="100%" stop-color="#064e3b"/>
+                </linearGradient>
+                <linearGradient id="hexStrokeGrad" x1="20" y1="20" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#38bdf8"/>
+                    <stop offset="50%" stop-color="#fbbf24"/>
+                    <stop offset="100%" stop-color="#10b981"/>
+                </linearGradient>
+                <linearGradient id="boltGrad" x1="40" y1="28" x2="60" y2="72" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#fde047"/>
+                    <stop offset="100%" stop-color="#f59e0b"/>
+                </linearGradient>
+            </defs>
+
+            <!-- Sabit Alt Devre Çerçevesi -->
+            <rect x="8" y="8" width="84" height="84" rx="10" stroke="#1e293b" stroke-width="1.5"/>
+
+            <!-- 4 Yönden Merkeze Gelen Veri Yolları (Sabit Hatlar) -->
+            <g stroke="#334155" stroke-width="1.8" stroke-linecap="round">
+                <path d="M35 8 V22 L42 29"/>
+                <path d="M50 8 V24"/>
+                <path d="M65 8 V22 L58 29"/>
+                <path d="M35 92 V78 L42 71"/>
+                <path d="M50 92 V76"/>
+                <path d="M65 92 V78 L58 71"/>
+                <path d="M8 35 H22 L29 42"/>
+                <path d="M8 50 H24"/>
+                <path d="M8 65 H22 L29 58"/>
+                <path d="M92 35 H78 L71 42"/>
+                <path d="M92 50 H76"/>
+                <path d="M92 65 H78 L71 58"/>
+            </g>
+
+            <!-- Akan Mavi & Altın Enerji Sinyalleri -->
+            <g class="cpu-trace-flow" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round">
+                <path d="M50 8 V24"/>
+                <path d="M50 92 V76"/>
+                <path d="M8 50 H24"/>
+                <path d="M92 50 H76"/>
+            </g>
+            <g class="cpu-trace-flow" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" opacity="0.85">
+                <path d="M35 8 V22 L42 29"/>
+                <path d="M65 92 V78 L58 71"/>
+                <path d="M8 65 H22 L29 58"/>
+                <path d="M92 35 H78 L71 42"/>
+            </g>
+
+            <!-- Köşe Lehim Adacıkları (Via Pads) -->
+            <circle cx="20" cy="20" r="2.5" fill="#fbbf24" opacity="0.8"/>
+            <circle cx="80" cy="20" r="2.5" fill="#38bdf8" opacity="0.8"/>
+            <circle cx="20" cy="80" r="2.5" fill="#38bdf8" opacity="0.8"/>
+            <circle cx="80" cy="80" r="2.5" fill="#fbbf24" opacity="0.8"/>
+
+            <!-- Merkezdeki Altıgen Enerji Çekirdeği (Hexagon Core) -->
+            <g class="cpu-hex-core">
+                <polygon points="50,21 75,35.5 75,64.5 50,79 25,64.5 25,35.5" fill="url(#coreHexGrad)" stroke="url(#hexStrokeGrad)" stroke-width="2.5" stroke-linejoin="round"/>
+                <polygon points="50,26 70,38 70,62 50,74 30,62 30,38" fill="none" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="3 2" opacity="0.6"/>
+            </g>
+
+            <!-- Çekirdek İçindeki Parlayan Şimşek (High-Voltage Core) -->
+            <path class="cpu-bolt" d="M54 31 L39 52 H49 L46 69 L61 48 H51 L54 31 Z" fill="url(#boltGrad)" stroke="#fef08a" stroke-width="0.8" stroke-linejoin="round"/>
+        </svg>
     </div>
+
     <div class="boot-title">KomponentBul Sistem Başlatılıyor</div>
     <div class="boot-status" id="bootStatusText">⚡ Güç kaynağı 5V'a sabitleniyor...</div>
     <div class="boot-progress-wrap">
@@ -405,7 +748,7 @@
         <button class="theme-toggle" id="themeBtn" onclick="temaDegistir()">🌙 Gece Modu</button>
     </div>
 
-    <!-- YENİ VEKTÖREL DEVRE LOGOSU -->
+    <!-- VEKTÖREL DEVRE LOGOSU -->
     <div class="brand-header">
         <div class="circuit-wing left">
             <svg width="90" height="32" viewBox="0 0 90 32" fill="none">
@@ -418,13 +761,14 @@
 
         <div class="brand-logo-box">
             <svg class="brand-chip-icon" viewBox="0 0 48 48" fill="none">
-                <rect x="10" y="10" width="28" height="28" rx="6" fill="#0f172a" stroke="#3b82f6" stroke-width="2.5"/>
-                <rect x="17" y="17" width="14" height="14" rx="3" fill="url(#chipGrad)"/>
-                <!-- Üst/Alt/Sol/Sağ Entegre Bacakları -->
-                <path d="M16 4V10M24 4V10M32 4V10M16 38V44M24 38V44M32 38V44M4 16H10M4 24H10M4 32H10M38 16H44M38 24H44M38 32H44" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M15 3V9M21 3V9M27 3V9M33 3V9M15 39V45M21 39V45M27 39V45M33 39V45M3 15H9M3 21H9M3 27H9M3 33H9M39 15H45M39 21H45M39 27H45M39 33H45" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round"/>
+                <rect x="8" y="8" width="32" height="32" rx="6" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="12" cy="12" r="1.5" fill="#fbbf24"/>
+                <polygon points="24,13 33.5,18.5 33.5,29.5 24,35 14.5,29.5 14.5,18.5" fill="#1e293b" stroke="url(#hdrHexGrad)" stroke-width="1.8"/>
+                <path d="M25.8 16.5 L19.5 25 H23.8 L22.2 31.5 L28.5 23 H24.2 L25.8 16.5 Z" fill="#fbbf24"/>
                 <defs>
-                    <linearGradient id="chipGrad" x1="17" y1="17" x2="31" y2="31" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#3b82f6"/>
+                    <linearGradient id="hdrHexGrad" x1="14" y1="13" x2="34" y2="35" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#38bdf8"/>
                         <stop offset="1" stop-color="#10b981"/>
                     </linearGradient>
                 </defs>
@@ -570,7 +914,9 @@ async function acilisAnimasyonuBaslat() {
 
     setTimeout(() => {
         overlay.classList.add('hidden');
-        document.getElementById('searchInput').focus();
+        if (window.innerWidth > 640) {
+            document.getElementById('searchInput').focus();
+        }
     }, 450);
 }
 
@@ -595,7 +941,7 @@ function tabloyuCiz(veriler) {
     });
 
     if (filtrelenmis.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Bu kategoride sonuç bulunamadı.</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5" style="text-align: center;">Bu kategoride sonuç bulunamadı.</td></tr>';
         table.style.display = 'table';
         return;
     }
@@ -616,11 +962,11 @@ function tabloyuCiz(veriler) {
 
         tbody.innerHTML += `
             <tr class="${satirClass}">
-                <td><strong>${item.Tedarikci}</strong>${rozetHtml}</td>
-                <td>${item.Urun}</td>
-                <td><strong>${item.Fiyat}</strong></td>
-                <td>${durumHtml}</td>
-                <td><a class="incele-btn" href="${item.Link}" target="_blank">İncele</a></td>
+                <td class="col-tedarikci"><strong>${item.Tedarikci}</strong>${rozetHtml}</td>
+                <td class="col-urun">${item.Urun}</td>
+                <td class="col-fiyat"><strong>${item.Fiyat}</strong></td>
+                <td class="col-durum">${durumHtml}</td>
+                <td class="col-islem"><a class="incele-btn" href="${item.Link}" target="_blank">İncele</a></td>
             </tr>
         `;
     });
@@ -666,13 +1012,12 @@ async function ara() {
         clearInterval(aramaMesajTimer);
         loadingCard.style.display = 'none';
         tumSonuclar = data.sonuclar || [];
-        sonArananKod = kod;
-
+        sonArananKod = kod;\n
         tabloyuCiz(tumSonuclar);
     } catch (error) {
         clearInterval(aramaMesajTimer);
         loadingCard.style.display = 'none';
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #ef4444;">Bağlantı koptu veya sunucu uyanıyor, lütfen tekrar Sorgula\'ya basın.</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5" style="text-align: center; color: #ef4444;">Bağlantı koptu veya sunucu uyanıyor, lütfen tekrar Sorgula\'ya basın.</td></tr>';
         table.style.display = 'table';
         console.error(error);
     }
