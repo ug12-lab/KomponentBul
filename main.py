@@ -169,15 +169,16 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
                 veri = json.loads(sc.string or "")
                 if veri.get("@type") == "ItemList" and "itemListElement" in veri:
                     for el in veri["itemListElement"][:8]:
-                        isim = el.get("name", "").strip()
-                        aciklama = el.get("description", "").strip()
+                        urun_bilgi = el.get("item", el)
+                        isim = urun_bilgi.get("name", "").strip()
+                        aciklama = urun_bilgi.get("description", "").strip()
                         if aciklama and aciklama not in isim:
                             tam_isim = f"{isim} ({aciklama})"
                         else:
                             tam_isim = isim
 
-                        link = el.get("url", ps_url)
-                        offers = el.get("offers", [])
+                        link = urun_bilgi.get("url", ps_url)
+                        offers = urun_bilgi.get("offers", [])
                         offer = offers[0] if isinstance(offers, list) and offers else (offers if isinstance(offers, dict) else {})
 
                         fiyat_deger = offer.get("price")
@@ -321,7 +322,6 @@ def site_tara(ad, ayarlar, ham_sorgu):
                         fiyat_gosterim = "Tükendi"
                         stok_durum = "Tükendi"
 
-                        # Önce bilinen fiyat kutularına bak, yoksa tüm kart metnini tara
                         fiyat_kutu = urun.select_one('.showcase-price-new, .currentPrice, .discountPriceSpan, .product-price')
                         fiyat_kaynak_metin = fiyat_kutu.text if fiyat_kutu else urun.text
                         raw_text = fiyat_kaynak_metin.replace('\n', ' ')
