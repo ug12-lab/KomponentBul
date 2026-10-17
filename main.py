@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
 import re
+import json
 from curl_cffi import requests as tls_requests
 
 app = FastAPI()
@@ -23,7 +24,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".ems-prd"}
+        "seciciler": {"kutu": ".productItem"}
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
@@ -50,60 +51,42 @@ TEDARIKCILER = {
         "seciciler": {"kutu": "div[data-toggle='product'], .showcase"}
     },
     "Kartal Otomasyon": {
-        "url_sablonu": "https://www.kartalotomasyon.com.tr/arama?q={}",
+        "url_sablonu": "https://www.kartalotomasyon.com.tr/arama/{}",
         "base_url": "https://www.kartalotomasyon.com.tr",
         "kategori": "Perakende",
-        "seciciler": {"kutu": "div[data-toggle='product'], .showcase"}
+        "seciciler": {"kutu": ".showcase, div[data-toggle='product']"}
     },
-    "Komponentci": {
-        "url_sablonu": "https://www.komponentci.net/Arama.aspx?kelime={}",
-        "base_url": "https://www.komponentci.net",
-        "kategori": "Perakende",
-        "seciciler": {"kutu": ".productItem, .showcase"}
-    },
-    "Samm Market": {
-        "url_sablonu": "https://market.samm.com/search?q={}",
-        "base_url": "https://market.samm.com",
-        "kategori": "Perakende",
-        "seciciler": {"kutu": ".product-card"}
-    },
-    
+
     # --- TOPTAN SİTELER ---
-    "Merter Elektronik": {
-        "url_sablonu": "https://www.merterelektronik.com/Arama.aspx?kelime={}",
-        "base_url": "https://www.merterelektronik.com",
-        "kategori": "Toptan",
-        "seciciler": {"kutu": ".productItem, .showcase"}
-    },
     "Özdisan": {
-        "url_sablonu": "https://ozdisan.com/Search?q={}",
-        "base_url": "https://ozdisan.com",
+        "url_sablonu": "https://www.ozdisan.com/c?search={}",
+        "base_url": "https://www.ozdisan.com",
         "kategori": "Toptan",
-        "seciciler": {"kutu": ".product-item"}
-    },
-    "Empastore": {
-        "url_sablonu": "https://www.empastore.com/arama?q={}",
-        "base_url": "https://www.empastore.com",
-        "kategori": "Toptan",
-        "seciciler": {"kutu": ".product-item, .showcase"}
+        "seciciler": {"kutu": "ozdisan_ozel"}
     },
     "Karaköy Elektronik": {
-        "url_sablonu": "https://www.karakoyelektronik.com/arama?q={}",
+        "url_sablonu": "https://www.karakoyelektronik.com/arama/{}",
         "base_url": "https://www.karakoyelektronik.com",
         "kategori": "Toptan",
         "seciciler": {"kutu": ".showcase, .product-item"}
     },
     "F1 Depo": {
-        "url_sablonu": "https://www.f1depo.com/arama?q={}",
+        "url_sablonu": "https://www.f1depo.com/arama/{}",
         "base_url": "https://www.f1depo.com",
         "kategori": "Toptan",
         "seciciler": {"kutu": ".showcase, .product-item"}
     },
     "Elektrovadi": {
-        "url_sablonu": "https://www.elektrovadi.com/arama?q={}",
+        "url_sablonu": "https://www.elektrovadi.com/arama/{}",
         "base_url": "https://www.elektrovadi.com",
         "kategori": "Toptan",
         "seciciler": {"kutu": ".showcase, .product-item"}
+    },
+    "Merter Elektronik": {
+        "url_sablonu": "https://www.merterelektronik.com/Arama.aspx?kelime={}",
+        "base_url": "https://www.merterelektronik.com",
+        "kategori": "Toptan",
+        "seciciler": {"kutu": ".productItem, .showcase"}
     }
 }
 
@@ -127,7 +110,13 @@ def fiyat_temizle(fiyat_str):
     if not fiyat_str or "Tükendi" in fiyat_str or "Stokta" in fiyat_str:
         return 999999.0
     temiz = ''.join(c for c in fiyat_str if c.isdigit() or c in ',.')
-    temiz = temiz.replace('.', '').replace(',', '.')
+    if ',' in temiz and '.' in temiz:
+        if temiz.rfind(',') > temiz.rfind('.'):
+            temiz = temiz.replace('.', '').replace(',', '.')
+        else:
+            temiz = temiz.replace(',', '')
+    elif ',' in temiz:
+        temiz = temiz.replace(',', '.')
     try:
         return float(temiz)
     except Exception:
@@ -135,151 +124,283 @@ def fiyat_temizle(fiyat_str):
 
 def metni_sayiya_cevir(fiyat_metni):
     temiz = re.sub(r'[^\d,.]', '', fiyat_metni)
-    temiz = temiz.replace('.', '').replace(',', '.')
+    if ',' in temiz and '.' in temiz:
+        if temiz.rfind(',') > temiz.rfind('.'):
+            temiz = temiz.replace('.', '').replace(',', '.')
+        else:
+            temiz = temiz.replace(',', '')
+    elif ',' in temiz:
+        temiz = temiz.replace(',', '.')
     try:
         return float(temiz)
     except Exception:
         return None
 
-def site_tara(ad, ayarlar, q_encoded):
+def ozdisan_tara(ad, ayarlar, ham_sorgu):
+    """Özdisan Next.js yapısı için /c?search= üzerinden kategoriye geçip JSON-LD okuyan özel tarayıcı."""
     bulunanlar = []
-    url = ayarlar["url_sablonu"].format(q_encoded)
-    sec = ayarlar["seciciler"]
+    q_encoded = urllib.parse.quote(ham_sorgu.strip())
+    arama_url = ayarlar["url_sablonu"].format(q_encoded)
+    kategori_adi = ayarlar["kategori"]
 
     try:
-        res = tls_requests.get(url, impersonate="chrome110", timeout=15)
+        res = tls_requests.get(arama_url, impersonate="chrome110", timeout=15)
+        if res.status_code != 200:
+            return bulunanlar
 
-        if res.status_code == 200:
-            soup = BeautifulSoup(res.text, 'html.parser')
-            urunler = soup.select(sec["kutu"])
-            
-            # YENİ İDEASOFT V8 TEMA KURTARICISI
-            if not urunler:
-                detay_kartlari = soup.select(".product-detail-card")
-                if detay_kartlari:
-                    urunler = [kart.parent for kart in detay_kartlari if kart.parent]
+        soup = BeautifulSoup(res.text, 'html.parser')
+        ps_link_etiketi = soup.select_one('a[href*="/ps/"]')
+        if not ps_link_etiketi:
+            return bulunanlar
 
-            eklenen_isimler = set()
-            sayac = 0
+        ps_href = ps_link_etiketi.get("href", "")
+        if not ps_href.startswith("http"):
+            ps_url = ayarlar["base_url"] + (ps_href if ps_href.startswith("/") else "/" + ps_href)
+        else:
+            ps_url = ps_href
 
-            for urun in urunler:
-                if sayac >= 8:
-                    break
+        res_ps = tls_requests.get(ps_url, impersonate="chrome110", timeout=15)
+        if res_ps.status_code != 200:
+            return bulunanlar
 
-                try:
-                    isim = ""
-                    link = url
-
-                    title_elem = urun.select_one('.productName a, .product-title, [data-qa="product-title"], .productName, .product-name')
-                    if title_elem:
-                        isim = title_elem.text.replace("Yeni", "").replace("YENİ", "").strip()
-                        if title_elem.name == 'a' and title_elem.has_attr('href'):
-                            link = title_elem['href']
+        soup_ps = BeautifulSoup(res_ps.text, 'html.parser')
+        for sc in soup_ps.find_all("script", type="application/ld+json"):
+            try:
+                veri = json.loads(sc.string or "")
+                if veri.get("@type") == "ItemList" and "itemListElement" in veri:
+                    for el in veri["itemListElement"][:8]:
+                        isim = el.get("name", "").strip()
+                        aciklama = el.get("description", "").strip()
+                        if aciklama and aciklama not in isim:
+                            tam_isim = f"{isim} ({aciklama})"
                         else:
-                            for a in urun.find_all('a'):
-                                if a.has_attr('href') and a['href'] != "#":
-                                    link = a['href']
-                                    break
-                    
-                    if len(isim) < 3:
-                        for a in urun.find_all('a'):
-                            text = a.text.replace("Yeni", "").replace("YENİ", "").strip()
-                            text = re.sub(r'\{.*?\}', '', text)
-                            lower_text = text.lower()
-                            
-                            yasakli_kelimeler = ["incele", "sepete ekle", "favori", "karşılaştır", "karsilastir", "listeye", "stokta", "tükendi", "kargo", "haber ver", "hızlı al", "satın al"]
-                            
-                            if len(text) > len(isim) and not any(y in lower_text for y in yasakli_kelimeler):
-                                isim = text
-                                temp_link = a.get('href', '')
-                                if temp_link:
-                                    link = temp_link
+                            tam_isim = isim
 
-                    isim = re.sub(r'\s+', ' ', isim).strip()
+                        link = el.get("url", ps_url)
+                        offers = el.get("offers", [])
+                        offer = offers[0] if isinstance(offers, list) and offers else (offers if isinstance(offers, dict) else {})
 
-                    if len(isim) < 3 or isim in eklenen_isimler:
-                        continue
+                        fiyat_deger = offer.get("price")
+                        para_birimi = offer.get("priceCurrency", "USD")
+                        stok_var = "InStock" in str(offer.get("availability", ""))
 
-                    if link and not link.startswith('http'):
-                        link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
+                        sayi = None
+                        if fiyat_deger is not None:
+                            try:
+                                sayi = float(str(fiyat_deger).replace(",", "."))
+                            except Exception:
+                                sayi = None
 
-                    stokta_yok_mu = False
-
-                    aday = urun.select_one('.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, .ems-prd-badge-tukendi, .product-out-of-stock')
-                    if aday and gorunur_mu(aday):
-                        stokta_yok_mu = True
-
-                    if not stokta_yok_mu:
-                        for etiket in urun.find_all(['div', 'span', 'a', 'p', 'b', 'button']):
-                            metin = etiket.text.strip().lower()
-                            if metin in ["tükendi", "stokta yok", "tükendi̇"] and gorunur_mu(etiket):
-                                stokta_yok_mu = True
-                                break
-
-                    fiyat_gosterim = "Tükendi"
-                    stok_durum = "Tükendi"
-
-                    raw_text = urun.text.replace('\n', ' ')
-                    raw_text = re.sub(r'\{.*?\}', '', raw_text)
-
-                    if not stokta_yok_mu:
-                        fiyat_eslesmeler = re.findall(
-                            r'(?:TL|₺|tl|USD|\$|EUR|€)\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl|USD|\$|EUR|€)',
-                            raw_text, re.IGNORECASE
-                        )
-                        gecerli = []
-                        for e in fiyat_eslesmeler:
-                            sayi = metni_sayiya_cevir(e)
-                            if sayi and sayi > 0:
-                                gecerli.append((sayi, e))
-
-                        if gecerli:
-                            gecerli.sort(key=lambda x: x[0])
-                            _, en_uygun_metin = gecerli[0]
-                            saf_metin = en_uygun_metin.upper()
-                            
-                            if "$" in saf_metin or "USD" in saf_metin:
-                                fiyat_gosterim = f"{gecerli[0][0]:.2f} $"
-                            elif "€" in saf_metin or "EUR" in saf_metin:
-                                fiyat_gosterim = f"{gecerli[0][0]:.2f} €"
-                            else:
-                                fiyat_gosterim = f"{gecerli[0][0]:.2f} TL"
-                                
+                        if stok_var and sayi and sayi > 0:
+                            sembol = "$" if para_birimi == "USD" else ("€" if para_birimi == "EUR" else "TL")
+                            fiyat_gosterim = f"{sayi:.4f} {sembol}" if sayi < 1 else f"{sayi:.2f} {sembol}"
                             stok_durum = "Canlı Veri"
                         else:
-                            alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', raw_text)
-                            if alternatif_sayi:
-                                fiyat_gosterim = alternatif_sayi.group(0) + " TL"
-                                stok_durum = "Canlı Veri"
+                            fiyat_gosterim = "Tükendi"
+                            stok_durum = "Tükendi"
 
-                    if not stokta_yok_mu and stok_durum == "Tükendi":
-                        continue
-
-                    if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
-                        fiyat_gosterim = "Tükendi"
-                        stok_durum = "Tükendi"
-
-                    eklenen_isimler.add(isim)
-                    
-                    bulunanlar.append({
-                        "tedarikci": ad,
-                        "Tedarikci": ad,
-                        "urun_adi": isim,
-                        "Urun": isim,
-                        "fiyat_metni": fiyat_gosterim,
-                        "Fiyat": fiyat_gosterim,
-                        "canli": (stok_durum == "Canlı Veri"),
-                        "Durum": stok_durum,
-                        "url": link,
-                        "Link": link
-                    })
-                    sayac += 1
-                except Exception:
-                    continue
+                        bulunanlar.append({
+                            "tedarikci": ad,
+                            "Tedarikci": ad,
+                            "Kategori": kategori_adi,
+                            "kategori": kategori_adi,
+                            "urun_adi": tam_isim,
+                            "Urun": tam_isim,
+                            "fiyat_metni": fiyat_gosterim,
+                            "Fiyat": fiyat_gosterim,
+                            "canli": (stok_durum == "Canlı Veri"),
+                            "Durum": stok_durum,
+                            "url": link,
+                            "Link": link
+                        })
+                    break
+            except Exception:
+                continue
     except Exception as e:
         print(f"[{ad}] HATA: {str(e)}")
 
     return bulunanlar
+
+def site_tara(ad, ayarlar, ham_sorgu):
+    if ayarlar["seciciler"].get("kutu") == "ozdisan_ozel":
+        return ozdisan_tara(ad, ayarlar, ham_sorgu)
+
+    bulunanlar = []
+    kategori_adi = ayarlar["kategori"]
+    sec = ayarlar["seciciler"]
+
+    # Merter Elektronik'te "LM358" veya "BC547" gibi bitişik kodlar "LM 358" olarak kayıtlıdır
+    sorgu_adaylari = [ham_sorgu.strip()]
+    if ad == "Merter Elektronik":
+        ayrik = re.sub(r'^([A-Za-z]+)(\d+.*)$', r'\1 \2', ham_sorgu.strip())
+        if ayrik != ham_sorgu.strip():
+            sorgu_adaylari.insert(0, ayrik)
+
+    for aktif_sorgu in sorgu_adaylari:
+        q_encoded = urllib.parse.quote(aktif_sorgu)
+        url = ayarlar["url_sablonu"].format(q_encoded)
+
+        try:
+            res = tls_requests.get(url, impersonate="chrome110", timeout=15)
+
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                urunler = soup.select(sec["kutu"])
+
+                # YENİ İDEASOFT V8 TEMA KURTARICISI
+                if not urunler:
+                    detay_kartlari = soup.select(".product-detail-card")
+                    if detay_kartlari:
+                        urunler = [kart.parent for kart in detay_kartlari if kart.parent]
+
+                eklenen_isimler = set()
+                sayac = 0
+
+                for urun in urunler:
+                    if sayac >= 8:
+                        break
+
+                    try:
+                        isim = ""
+                        link = url
+
+                        title_elem = urun.select_one(
+                            '.showcase-title a, a.vitrin-product-title, .productName a, .detailLink, '
+                            '.product-title, [data-qa="product-title"], .productName, .product-name'
+                        )
+                        if title_elem:
+                            isim = (title_elem.get("title") or title_elem.text or "").replace("Yeni", "").replace("YENİ", "").strip()
+                            if title_elem.name == 'a' and title_elem.has_attr('href'):
+                                link = title_elem['href']
+                            else:
+                                a_tag = title_elem.find('a') or urun.find('a', href=True)
+                                if a_tag and a_tag.get('href') and a_tag['href'] != "#":
+                                    link = a_tag['href']
+
+                        if len(isim) < 3:
+                            for a in urun.find_all('a'):
+                                text = (a.get("title") or a.text or "").replace("Yeni", "").replace("YENİ", "").strip()
+                                text = re.sub(r'\{.*?\}', '', text)
+                                lower_text = text.lower()
+
+                                yasakli_kelimeler = [
+                                    "incele", "sepete ekle", "favori", "karşılaştır", "karsilastir",
+                                    "listeye", "stokta", "tükendi", "kargo", "haber ver", "hızlı al", "satın al"
+                                ]
+
+                                if len(text) > len(isim) and not any(y in lower_text for y in yasakli_kelimeler):
+                                    isim = text
+                                    temp_link = a.get('href', '')
+                                    if temp_link and temp_link != "#":
+                                        link = temp_link
+
+                        isim = re.sub(r'\s+', ' ', isim).strip()
+
+                        if len(isim) < 3 or isim in eklenen_isimler:
+                            continue
+
+                        if link and not link.startswith('http'):
+                            link = ayarlar["base_url"] + link if link.startswith('/') else ayarlar["base_url"] + '/' + link
+
+                        stokta_yok_mu = False
+
+                        aday = urun.select_one(
+                            '.out-of-stock, .stock-out, .no-stock, .tukendi, .sold-out, '
+                            '.sold-out-label, .no-stock-button, .ems-prd-badge-tukendi, .product-out-of-stock'
+                        )
+                        if aday and gorunur_mu(aday):
+                            stokta_yok_mu = True
+
+                        if not stokta_yok_mu:
+                            for etiket in urun.find_all(['div', 'span', 'a', 'p', 'b', 'button']):
+                                metin = etiket.text.strip().lower()
+                                if metin in ["tükendi", "stokta yok", "tükendi̇", "gelince haber ver"] and gorunur_mu(etiket):
+                                    stokta_yok_mu = True
+                                    break
+
+                        fiyat_gosterim = "Tükendi"
+                        stok_durum = "Tükendi"
+
+                        # Önce bilinen fiyat kutularına bak, yoksa tüm kart metnini tara
+                        fiyat_kutu = urun.select_one('.showcase-price-new, .currentPrice, .discountPriceSpan, .product-price')
+                        fiyat_kaynak_metin = fiyat_kutu.text if fiyat_kutu else urun.text
+                        raw_text = fiyat_kaynak_metin.replace('\n', ' ')
+                        raw_text = re.sub(r'\{.*?\}', '', raw_text)
+
+                        if not stokta_yok_mu:
+                            fiyat_eslesmeler = re.findall(
+                                r'(?:TL|₺|tl|USD|\$|EUR|€)\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl|USD|\$|EUR|€)',
+                                raw_text, re.IGNORECASE
+                            )
+                            if not fiyat_eslesmeler and fiyat_kutu:
+                                raw_all = re.sub(r'\{.*?\}', '', urun.text.replace('\n', ' '))
+                                fiyat_eslesmeler = re.findall(
+                                    r'(?:TL|₺|tl|USD|\$|EUR|€)\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:TL|₺|tl|USD|\$|EUR|€)',
+                                    raw_all, re.IGNORECASE
+                                )
+
+                            gecerli = []
+                            for e in fiyat_eslesmeler:
+                                sayi = metni_sayiya_cevir(e)
+                                if sayi and sayi > 0:
+                                    gecerli.append((sayi, e))
+
+                            if gecerli:
+                                gecerli.sort(key=lambda x: x[0])
+                                _, en_uygun_metin = gecerli[0]
+                                saf_metin = en_uygun_metin.upper()
+
+                                if "$" in saf_metin or "USD" in saf_metin:
+                                    fiyat_gosterim = f"{gecerli[0][0]:.2f} $"
+                                elif "€" in saf_metin or "EUR" in saf_metin:
+                                    fiyat_gosterim = f"{gecerli[0][0]:.2f} €"
+                                else:
+                                    fiyat_gosterim = f"{gecerli[0][0]:.2f} TL"
+
+                                stok_durum = "Canlı Veri"
+                            else:
+                                alternatif_sayi = re.search(r'\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})', raw_text)
+                                if alternatif_sayi:
+                                    fiyat_gosterim = alternatif_sayi.group(0) + " TL"
+                                    stok_durum = "Canlı Veri"
+
+                        if not stokta_yok_mu and stok_durum == "Tükendi":
+                            continue
+
+                        if "0,00" in fiyat_gosterim or "0.00" in fiyat_gosterim:
+                            fiyat_gosterim = "Tükendi"
+                            stok_durum = "Tükendi"
+
+                        eklenen_isimler.add(isim)
+
+                        bulunanlar.append({
+                            "tedarikci": ad,
+                            "Tedarikci": ad,
+                            "Kategori": kategori_adi,
+                            "kategori": kategori_adi,
+                            "urun_adi": isim,
+                            "Urun": isim,
+                            "fiyat_metni": fiyat_gosterim,
+                            "Fiyat": fiyat_gosterim,
+                            "canli": (stok_durum == "Canlı Veri"),
+                            "Durum": stok_durum,
+                            "url": link,
+                            "Link": link
+                        })
+                        sayac += 1
+                    except Exception:
+                        continue
+        except Exception as e:
+            print(f"[{ad}] HATA: {str(e)}")
+
+        if bulunanlar:
+            break
+
+    return bulunanlar
+
+@app.get("/ping")
+def sunucu_durumu():
+    return {"durum": "aktif"}
 
 @app.get("/")
 def ana_sayfa():
@@ -288,20 +409,19 @@ def ana_sayfa():
 @app.get("/arama")
 def arama_yap(q: str, kategori: str = "Hepsi"):
     sonuclar = []
-    q_encoded = urllib.parse.quote(q)
-    kategori_kucuk = kategori.lower()
+    kategori_kucuk = kategori.strip().lower()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=14) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         gelecek_sonuclar = []
         for ad, ayarlar in TEDARIKCILER.items():
-            site_kategori = ayarlar["kategori"].lower()
-            
-            if kategori_kucuk != "hepsi":
-                if site_kategori not in kategori_kucuk and kategori_kucuk not in site_kategori:
+            site_kategori = ayarlar["kategori"].strip().lower()
+
+            if kategori_kucuk not in ["hepsi", "tümü", "tumu", ""]:
+                if site_kategori != kategori_kucuk:
                     continue
 
-            gelecek_sonuclar.append(executor.submit(site_tara, ad, ayarlar, q_encoded))
-            
+            gelecek_sonuclar.append(executor.submit(site_tara, ad, ayarlar, q))
+
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             sonuclar.extend(gelecek.result())
 
