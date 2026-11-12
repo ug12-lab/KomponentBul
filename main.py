@@ -29,7 +29,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.elektromarketim.com/arama?q={}",
         "base_url": "https://www.elektromarketim.com",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".productItem"}
+        "seciciler": {"kutu": ".ems-prd, .productItem, .product-item, .showcase"}
     },
     "Robotistan": {
         "url_sablonu": "https://www.robotistan.com/arama?q={}",
@@ -59,7 +59,7 @@ TEDARIKCILER = {
         "url_sablonu": "https://www.kartalotomasyon.com.tr/arama/{}",
         "base_url": "https://www.kartalotomasyon.com.tr",
         "kategori": "Perakende",
-        "seciciler": {"kutu": ".showcase, div[data-toggle='product']"}
+        "seciciler": {"kutu": ".showcase, div[data-toggle='product'], .product-item"}
     },
 
     # --- TOPTAN SİTELER ---
@@ -102,7 +102,6 @@ TR_HEADERS = {
     "Cookie": 'NEXT_LOCALE=tr; user-settings=%7B%22languageCode%22%3A%22tr%22%2C%22currencyCode%22%3A%22TRY%22%2C%22countryCode%22%3A%22TR%22%2C%22isAuthenticated%22%3Afalse%7D; Currency=TRY; Language=tr'
 }
 
-# Başlangıç yedek değerleri (Sunucu açılır açılmaz açık kaynak API ile anlık güncellenir)
 USD_KUR = 34.50
 EUR_KUR = 37.50
 KUR_KAYNAK = "Varsayılan"
@@ -110,7 +109,6 @@ KUR_KAYNAK = "Varsayılan"
 def guncel_kurlari_cek():
     """Açık kaynaklı döviz API'lerinden (Frankfurter ECB & Open ER-API) anlık USD/TRY ve EUR/TRY kurlarını çeker."""
     global USD_KUR, EUR_KUR, KUR_KAYNAK
-    # 1. Kaynak: Frankfurter Open-Source API (Avrupa Merkez Bankası Verisi)
     try:
         r_usd = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=USD&to=TRY", timeout=8)
         r_eur = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=EUR&to=TRY", timeout=8)
@@ -125,7 +123,6 @@ def guncel_kurlari_cek():
     except Exception:
         pass
 
-    # 2. Yedek Açık Kaynak: Open Exchange Rates API
     try:
         r_open = tls_requests.get("https://open.er-api.com/v6/latest/USD", timeout=8)
         if r_open.status_code == 200:
@@ -315,7 +312,7 @@ def site_tara(ad, ayarlar, ham_sorgu):
 
                         title_elem = urun.select_one(
                             '.showcase-title a, a.vitrin-product-title, .productName a, .detailLink, '
-                            '.product-title, [data-qa="product-title"], .productName, .product-name'
+                            '.product-title, [data-qa="product-title"], .productName, .product-name, .ems-prd-name'
                         )
                         if title_elem:
                             isim = (title_elem.get("title") or title_elem.text or "").replace("Yeni", "").replace("YENİ", "").strip()
@@ -370,7 +367,7 @@ def site_tara(ad, ayarlar, ham_sorgu):
                         fiyat_gosterim = "Tükendi"
                         stok_durum = "Tükendi"
 
-                        fiyat_kutu = urun.select_one('.showcase-price-new, .currentPrice, .discountPriceSpan, .product-price')
+                        fiyat_kutu = urun.select_one('.showcase-price-new, .currentPrice, .discountPriceSpan, .product-price, .ems-prd-price')
                         fiyat_kaynak_metin = fiyat_kutu.text if fiyat_kutu else urun.text
                         raw_text = fiyat_kaynak_metin.replace('\n', ' ')
                         raw_text = re.sub(r'\{.*?\}', '', raw_text)
@@ -441,6 +438,64 @@ def site_tara(ad, ayarlar, ham_sorgu):
 class AIProjeIstegi(BaseModel):
     prompt: str
 
+SISTEM_TALIMATI = (
+    "Sen KomponentBul elektronik komponent karşılaştırma platformunun uzman elektronik ve robotik mühendisi "
+    "yapay zeka asistanısın. Kullanıcı bir proje, robot veya devre yapmak istediğinde Türkçe olarak kısa, "
+    "anlaşılır bir proje özeti yaz ve gereken temel elektronik malzemeleri listele. "
+    "Her malzemenin 'arama_kodu' alanına Türkiye'deki elektronik sitelerinde aratıldığında doğrudan "
+    "ürünü bulacak kısa ve standart parça adını/kodunu yaz (Örn: 'Arduino Uno', 'L298N', 'SG90 Servo', "
+    "'HC-SR04', 'TCRT5000', 'LM358', 'BC547'). En fazla 6 temel malzeme öner. "
+    "Yanıtı SADECE şu JSON şemasında ver: "
+    '{"aciklama": "Proje özeti...", "malzemeler": [{"ad": "...", "arama_kodu": "...", "adet": "...", "gorev": "..."}]}'
+)
+
+def gemini_yetkili_model_ile_uret(api_key: str, kullanici_prompt: str):
+    """API anahtarının Google AI Studio'da yetkili olduğu modelleri otomatik tespit edip JSON yanıt üretir."""
+    aday_modeller = []
+    try:
+        r_models = tls_requests.get(
+            f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
+            timeout=10
+        )
+        if r_models.status_code == 200:
+            for m in r_models.json().get("models", []):
+                isim = m.get("name", "")
+                metodlar = m.get("supportedGenerationMethods", [])
+                if "generateContent" in metodlar and "gemini" in isim.lower():
+                    aday_modeller.append(isim)
+    except Exception:
+        pass
+
+    # Flash modellerini öne al
+    aday_modeller.sort(key=lambda x: (0 if "flash" in x.lower() else 1, x))
+    for varsayilan in ["models/gemini-2.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash"]:
+        if varsayilan not in aday_modeller:
+            aday_modeller.append(varsayilan)
+
+    son_hata = "Uygun model bulunamadı"
+    for model_yolu in aday_modeller[:5]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model_yolu}:generateContent?key={api_key}"
+        payload = {
+            "systemInstruction": {"parts": [{"text": SISTEM_TALIMATI}]},
+            "contents": [{"role": "user", "parts": [{"text": kullanici_prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"}
+        }
+        try:
+            r = tls_requests.post(url, json=payload, timeout=20)
+            if r.status_code == 200:
+                adaylar = r.json().get("candidates", [])
+                if adaylar:
+                    metin = adaylar[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    temiz_json = re.sub(r"^```(?:json)?|```$", "", metin.strip(), flags=re.MULTILINE).strip()
+                    return json.loads(temiz_json)
+            else:
+                son_hata = f"{model_yolu} -> HTTP {r.status_code}"
+        except Exception as e:
+            son_hata = str(e)
+            continue
+
+    raise RuntimeError(son_hata)
+
 @app.post("/ai-asistan")
 def ai_proje_asistani(istek: AIProjeIstegi):
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -449,18 +504,13 @@ def ai_proje_asistani(istek: AIProjeIstegi):
             "hata": "Sunucuda GEMINI_API_KEY tanımlı değil. Lütfen Render Environment Variables kısmına GEMINI_API_KEY ekleyin."
         }
 
+    # 1. Birincil SDK denemesi
     try:
         client = genai.Client(api_key=api_key)
         interaction = client.interactions.create(
             model="gemini-3.8-flash",
-            system_instruction=(
-                "Sen KomponentBul elektronik komponent karşılaştırma platformunun uzman elektronik ve robotik mühendisi "
-                "yapay zeka asistanısın. Kullanıcı bir proje, robot veya devre yapmak istediğinde (örneğin 'bana çizgi çizen bir robot yap', "
-                "'engelden kaçan robot', '5V güç kaynağı' vb.) Türkçe olarak kısa, anlaşılır bir proje özeti yaz ve gereken temel elektronik "
-                "malzemeleri listele. Her malzemenin 'arama_kodu' alanına Türkiye'deki elektronik sitelerinde aratıldığında doğrudan "
-                "ürünü bulacak kısa ve standart parça adını/kodunu yaz (Örn: 'Arduino Uno', 'L298N', 'SG90 Servo', '6V DC Motor', "
-                "'TCRT5000', 'LM358', 'BC547'). En fazla 6 temel malzeme öner."
-            ),
+            store=False,
+            system_instruction=SISTEM_TALIMATI,
             input=istek.prompt,
             response_format={
                 "type": "text",
@@ -487,10 +537,13 @@ def ai_proje_asistani(istek: AIProjeIstegi):
                 }
             }
         )
-        veri = json.loads(interaction.output_text)
-        return veri
-    except Exception as e:
-        return {"hata": f"Yapay zeka yanıt üretirken hata oluştu: {str(e)}"}
+        return json.loads(interaction.output_text)
+    except Exception:
+        # 2. Ücretsiz API Anahtarı Yetkili Model Otomatik Yedeği (403 Permission Denied Çözümü)
+        try:
+            return gemini_yetkili_model_ile_uret(api_key, istek.prompt)
+        except Exception as e2:
+            return {"hata": f"Yapay zeka yanıt üretirken hata oluştu: {str(e2)}"}
 
 @app.get("/ping")
 def sunucu_durumu():
@@ -550,13 +603,13 @@ def arka_plan_gorevleri():
     guncel_kurlari_cek()
     sayac = 0
     while True:
-        time.sleep(600)  # 10 dakikada bir sunucuyu uyanık tut
+        time.sleep(600)
         sayac += 1
         try:
             tls_requests.get("https://komponentbul.onrender.com/ping", timeout=10)
         except Exception:
             pass
-        if sayac % 3 == 0:  # 30 dakikada bir açık kaynak döviz kurunu güncelle
+        if sayac % 3 == 0:
             guncel_kurlari_cek()
 
 @app.on_event("startup")
