@@ -1,12 +1,17 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from bs4 import BeautifulSoup
 import urllib.parse
 import concurrent.futures
+import threading
+import time
+import os
 import re
 import json
 from curl_cffi import requests as tls_requests
+from google import genai
 
 app = FastAPI()
 
@@ -92,15 +97,48 @@ TEDARIKCILER = {
 
 GIZLI_ISARETLERI = {"d-none", "hidden", "invisible", "display-none", "hide"}
 
-# Yurt dışı sunucudan (Render) bağlanıldığında sitelerin Dolar/Euro yerine TL dönmesi için Türkiye başlıkları
 TR_HEADERS = {
     "Accept-Language": "tr-TR,tr;q=0.9",
     "Cookie": 'NEXT_LOCALE=tr; user-settings=%7B%22languageCode%22%3A%22tr%22%2C%22currencyCode%22%3A%22TRY%22%2C%22countryCode%22%3A%22TR%22%2C%22isAuthenticated%22%3Afalse%7D; Currency=TRY; Language=tr'
 }
 
-# Yurt dışı IP nedeniyle hala USD veya EUR dönen siteler için yaklaşık kur çarpanları
-USD_KUR = 43.0
-EUR_KUR = 47.0
+# Başlangıç yedek değerleri (Sunucu açılır açılmaz açık kaynak API ile anlık güncellenir)
+USD_KUR = 34.50
+EUR_KUR = 37.50
+KUR_KAYNAK = "Varsayılan"
+
+def guncel_kurlari_cek():
+    """Açık kaynaklı döviz API'lerinden (Frankfurter ECB & Open ER-API) anlık USD/TRY ve EUR/TRY kurlarını çeker."""
+    global USD_KUR, EUR_KUR, KUR_KAYNAK
+    # 1. Kaynak: Frankfurter Open-Source API (Avrupa Merkez Bankası Verisi)
+    try:
+        r_usd = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=USD&to=TRY", timeout=8)
+        r_eur = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=EUR&to=TRY", timeout=8)
+        if r_usd.status_code == 200 and r_eur.status_code == 200:
+            u = float(r_usd.json().get("rates", {}).get("TRY", 0))
+            e = float(r_eur.json().get("rates", {}).get("TRY", 0))
+            if u > 10 and e > 10:
+                USD_KUR = round(u, 4)
+                EUR_KUR = round(e, 4)
+                KUR_KAYNAK = "Frankfurter (ECB Açık Kaynak)"
+                return
+    except Exception:
+        pass
+
+    # 2. Yedek Açık Kaynak: Open Exchange Rates API
+    try:
+        r_open = tls_requests.get("https://open.er-api.com/v6/latest/USD", timeout=8)
+        if r_open.status_code == 200:
+            rates = r_open.json().get("rates", {})
+            try_rate = float(rates.get("TRY", 0))
+            eur_rate = float(rates.get("EUR", 0))
+            if try_rate > 10 and eur_rate > 0:
+                USD_KUR = round(try_rate, 4)
+                EUR_KUR = round(try_rate / eur_rate, 4)
+                KUR_KAYNAK = "Open ER-API"
+                return
+    except Exception:
+        pass
 
 def gorunur_mu(etiket):
     for el in [etiket] + list(etiket.parents):
@@ -154,7 +192,6 @@ def metni_sayiya_cevir(fiyat_metni):
         return None
 
 def ozdisan_tara(ad, ayarlar, ham_sorgu):
-    """Özdisan Next.js yapısı için /c?search= üzerinden kategoriye geçip JSON-LD okuyan özel tarayıcı."""
     bulunanlar = []
     q_encoded = urllib.parse.quote(ham_sorgu.strip())
     arama_url = ayarlar["url_sablonu"].format(q_encoded)
@@ -189,10 +226,7 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
                         urun_bilgi = el.get("item", el)
                         isim = urun_bilgi.get("name", "").strip()
                         aciklama = urun_bilgi.get("description", "").strip()
-                        if aciklama and aciklama not in isim:
-                            tam_isim = f"{isim} ({aciklama})"
-                        else:
-                            tam_isim = isim
+                        tam_isim = f"{isim} ({aciklama})" if (aciklama and aciklama not in isim) else isim
 
                         link = urun_bilgi.get("url", ps_url)
                         offers = urun_bilgi.get("offers", [])
@@ -223,18 +257,12 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
                             stok_durum = "Tükendi"
 
                         bulunanlar.append({
-                            "tedarikci": ad,
-                            "Tedarikci": ad,
-                            "Kategori": kategori_adi,
-                            "kategori": kategori_adi,
-                            "urun_adi": tam_isim,
-                            "Urun": tam_isim,
-                            "fiyat_metni": fiyat_gosterim,
-                            "Fiyat": fiyat_gosterim,
-                            "canli": (stok_durum == "Canlı Veri"),
-                            "Durum": stok_durum,
-                            "url": link,
-                            "Link": link
+                            "tedarikci": ad, "Tedarikci": ad,
+                            "Kategori": kategori_adi, "kategori": kategori_adi,
+                            "urun_adi": tam_isim, "Urun": tam_isim,
+                            "fiyat_metni": fiyat_gosterim, "Fiyat": fiyat_gosterim,
+                            "canli": (stok_durum == "Canlı Veri"), "Durum": stok_durum,
+                            "url": link, "Link": link
                         })
                     break
             except Exception:
@@ -252,7 +280,6 @@ def site_tara(ad, ayarlar, ham_sorgu):
     kategori_adi = ayarlar["kategori"]
     sec = ayarlar["seciciler"]
 
-    # Merter Elektronik'te "LM358" veya "BC547" gibi bitişik kodlar "LM 358" olarak kayıtlıdır
     sorgu_adaylari = [ham_sorgu.strip()]
     if ad == "Merter Elektronik":
         ayrik = re.sub(r'^([A-Za-z]+)(\d+.*)$', r'\1 \2', ham_sorgu.strip())
@@ -393,18 +420,12 @@ def site_tara(ad, ayarlar, ham_sorgu):
                         eklenen_isimler.add(isim)
 
                         bulunanlar.append({
-                            "tedarikci": ad,
-                            "Tedarikci": ad,
-                            "Kategori": kategori_adi,
-                            "kategori": kategori_adi,
-                            "urun_adi": isim,
-                            "Urun": isim,
-                            "fiyat_metni": fiyat_gosterim,
-                            "Fiyat": fiyat_gosterim,
-                            "canli": (stok_durum == "Canlı Veri"),
-                            "Durum": stok_durum,
-                            "url": link,
-                            "Link": link
+                            "tedarikci": ad, "Tedarikci": ad,
+                            "Kategori": kategori_adi, "kategori": kategori_adi,
+                            "urun_adi": isim, "Urun": isim,
+                            "fiyat_metni": fiyat_gosterim, "Fiyat": fiyat_gosterim,
+                            "canli": (stok_durum == "Canlı Veri"), "Durum": stok_durum,
+                            "url": link, "Link": link
                         })
                         sayac += 1
                     except Exception:
@@ -417,9 +438,70 @@ def site_tara(ad, ayarlar, ham_sorgu):
 
     return bulunanlar
 
+class AIProjeIstegi(BaseModel):
+    prompt: str
+
+@app.post("/ai-asistan")
+def ai_proje_asistani(istek: AIProjeIstegi):
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return {
+            "hata": "Sunucuda GEMINI_API_KEY tanımlı değil. Lütfen Render Environment Variables kısmına GEMINI_API_KEY ekleyin."
+        }
+
+    try:
+        client = genai.Client(api_key=api_key)
+        interaction = client.interactions.create(
+            model="gemini-3.8-flash",
+            system_instruction=(
+                "Sen KomponentBul elektronik komponent karşılaştırma platformunun uzman elektronik ve robotik mühendisi "
+                "yapay zeka asistanısın. Kullanıcı bir proje, robot veya devre yapmak istediğinde (örneğin 'bana çizgi çizen bir robot yap', "
+                "'engelden kaçan robot', '5V güç kaynağı' vb.) Türkçe olarak kısa, anlaşılır bir proje özeti yaz ve gereken temel elektronik "
+                "malzemeleri listele. Her malzemenin 'arama_kodu' alanına Türkiye'deki elektronik sitelerinde aratıldığında doğrudan "
+                "ürünü bulacak kısa ve standart parça adını/kodunu yaz (Örn: 'Arduino Uno', 'L298N', 'SG90 Servo', '6V DC Motor', "
+                "'TCRT5000', 'LM358', 'BC547'). En fazla 6 temel malzeme öner."
+            ),
+            input=istek.prompt,
+            response_format={
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "aciklama": {"type": "string"},
+                        "malzemeler": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "ad": {"type": "string"},
+                                    "arama_kodu": {"type": "string"},
+                                    "adet": {"type": "string"},
+                                    "gorev": {"type": "string"}
+                                },
+                                "required": ["ad", "arama_kodu", "adet", "gorev"]
+                            }
+                        }
+                    },
+                    "required": ["aciklama", "malzemeler"]
+                }
+            }
+        )
+        veri = json.loads(interaction.output_text)
+        return veri
+    except Exception as e:
+        return {"hata": f"Yapay zeka yanıt üretirken hata oluştu: {str(e)}"}
+
 @app.get("/ping")
 def sunucu_durumu():
-    return {"durum": "aktif"}
+    return {
+        "durum": "aktif",
+        "kurlar": {
+            "USD": round(USD_KUR, 2),
+            "EUR": round(EUR_KUR, 2),
+            "kaynak": KUR_KAYNAK
+        }
+    }
 
 @app.get("/")
 def ana_sayfa():
@@ -455,4 +537,29 @@ def arama_yap(q: str, kategori: str = "Hepsi"):
     sonuclar = benzersiz_sonuclar
 
     sonuclar.sort(key=lambda x: fiyat_temizle(x["fiyat_metni"]))
-    return {"sonuclar": sonuclar}           
+    return {
+        "sonuclar": sonuclar,
+        "kurlar": {
+            "USD": round(USD_KUR, 2),
+            "EUR": round(EUR_KUR, 2),
+            "kaynak": KUR_KAYNAK
+        }
+    }
+
+def arka_plan_gorevleri():
+    guncel_kurlari_cek()
+    sayac = 0
+    while True:
+        time.sleep(600)  # 10 dakikada bir sunucuyu uyanık tut
+        sayac += 1
+        try:
+            tls_requests.get("https://komponentbul.onrender.com/ping", timeout=10)
+        except Exception:
+            pass
+        if sayac % 3 == 0:  # 30 dakikada bir açık kaynak döviz kurunu güncelle
+            guncel_kurlari_cek()
+
+@app.on_event("startup")
+def baslangic_gorevi():
+    t = threading.Thread(target=arka_plan_gorevleri, daemon=True)
+    t.start()
