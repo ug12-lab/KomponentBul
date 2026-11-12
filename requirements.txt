@@ -2,3 +2,5 @@ fastapi
 uvicorn
 beautifulsoup4
 curl_cffi
+google-genai
+pydantic
