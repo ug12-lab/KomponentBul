@@ -26,7 +26,7 @@
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background-color: var(--bg-color); color: var(--text-main);
-        margin: 0; padding: 36px 24px; transition: background-color 0.25s, color 0.25s; overflow-x: hidden;
+        margin: 0; padding: 36px 24px 90px 24px; transition: background-color 0.25s, color 0.25s; overflow-x: hidden;
     }
 
     /* AÇILIŞ (BOOT) EKRANI */
@@ -96,7 +96,13 @@
     .boot-sub-hint { margin-top: 12px; font-size: 12px; color: #64748b; text-align: center; }
 
     .container { max-width: 920px; margin: 0 auto; position: relative; }
-    .top-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .rate-badge {
+        background: var(--card-bg); color: var(--text-sub); border: 1px solid var(--border-color);
+        padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+        display: inline-flex; align-items: center; gap: 6px;
+    }
+    .rate-badge strong { color: #10b981; }
     .theme-toggle {
         background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color);
         padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -176,9 +182,100 @@
         border-radius: 6px; font-size: 13px; text-decoration: none; font-weight: 600;
     }
 
+    /* --- SAĞ ALT YAPAY ZEKA (GEMINI AI) PANELİ --- */
+    .ai-fab {
+        position: fixed; right: 24px; bottom: 24px; z-index: 9000;
+        background: linear-gradient(135deg, #2563eb, #10b981); color: #ffffff;
+        border: none; border-radius: 99px; padding: 14px 22px; font-size: 15px; font-weight: 700;
+        cursor: pointer; display: flex; align-items: center; gap: 10px;
+        box-shadow: 0 8px 25px rgba(37, 99, 235, 0.45); transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .ai-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(16, 185, 129, 0.55); }
+
+    .ai-panel {
+        position: fixed; right: 24px; bottom: 84px; width: 410px; max-width: calc(100vw - 24px);
+        height: 560px; max-height: calc(100vh - 110px); background: var(--card-bg);
+        border: 1.5px solid #3b82f6; border-radius: 16px;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.28); z-index: 9001;
+        display: none; flex-direction: column; overflow: hidden;
+    }
+    .ai-panel.open { display: flex; }
+
+    .ai-header {
+        background: linear-gradient(135deg, #0f172a, #1e3a8a); color: #ffffff;
+        padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .ai-header-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .ai-header-sub { font-size: 11px; color: #93c5fd; font-weight: 500; }
+    .ai-close-btn {
+        background: rgba(255,255,255,0.12); color: #fff; border: none; width: 28px; height: 28px;
+        border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 14px;
+    }
+
+    .ai-quick-bar {
+        display: flex; gap: 6px; padding: 8px 12px; background: var(--th-bg);
+        border-bottom: 1px solid var(--border-color); overflow-x: auto; white-space: nowrap;
+    }
+    .ai-chip {
+        background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color);
+        padding: 5px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+    }
+    .ai-chip:hover { border-color: #3b82f6; color: #3b82f6; }
+
+    .ai-body {
+        flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+        background: var(--bg-color);
+    }
+    .ai-msg {
+        padding: 12px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.45;
+        background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main);
+    }
+    .ai-msg.user {
+        align-self: flex-end; background: #2563eb; color: #ffffff; border: none; max-width: 85%;
+    }
+    .ai-part-card {
+        background: var(--th-bg); border: 1px solid var(--border-color); border-radius: 10px;
+        padding: 10px 12px; margin-top: 8px;
+    }
+    .ai-part-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .ai-part-name { font-weight: 700; font-size: 13.5px; color: var(--text-main); }
+    .ai-part-qty {
+        font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+        background: var(--perakende-bg); color: var(--perakende-text); white-space: nowrap;
+    }
+    .ai-part-desc { font-size: 12px; color: var(--text-sub); margin: 4px 0 8px 0; }
+    .ai-part-bottom {
+        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+        gap: 8px; padding-top: 7px; border-top: 1px dashed var(--border-color);
+    }
+    .ai-price-tag { font-size: 12px; font-weight: 700; color: #10b981; }
+    .ai-search-jump {
+        background: #3b82f6; color: #ffffff; border: none; padding: 5px 10px;
+        border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+    }
+    .ai-search-jump:hover { background: #2563eb; }
+    .ai-total-box {
+        margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+        background: var(--cheapest-bg); border: 1px solid var(--cheapest-border);
+        font-size: 13px; font-weight: 700; color: var(--text-main); text-align: center;
+    }
+
+    .ai-footer {
+        padding: 10px 12px; background: var(--card-bg); border-top: 1px solid var(--border-color);
+        display: flex; gap: 8px;
+    }
+    .ai-footer input {
+        flex: 1; padding: 10px 12px; font-size: 14px; border-radius: 8px;
+        border: 1.5px solid var(--border-color); background: var(--input-bg); color: var(--text-main);
+    }
+    .ai-send-btn {
+        background: #10b981; color: #ffffff; border: none; padding: 10px 16px;
+        border-radius: 8px; font-weight: 700; font-size: 13.5px; cursor: pointer; white-space: nowrap;
+    }
+
     /* TABLET (641px - 900px) */
     @media (max-width: 900px) {
-        body { padding: 24px 16px; }
+        body { padding: 24px 16px 90px 16px; }
         .circuit-wing { width: 55px; }
         .brand-text { font-size: 26px; }
         th, td { padding: 12px; font-size: 14px; }
@@ -186,7 +283,7 @@
 
     /* TELEFON / MOBİL (≤ 640px) */
     @media (max-width: 640px) {
-        body { padding: 14px 12px 28px 12px; }
+        body { padding: 14px 12px 90px 12px; }
         .circuit-wing { display: none; }
         .brand-logo-box { padding: 8px 16px; gap: 10px; border-radius: 12px; }
         .brand-chip-icon { width: 34px; height: 34px; }
@@ -222,6 +319,9 @@
         td.col-fiyat { grid-area: fiyat; font-size: 18px; color: #10b981; }
         td.col-islem { grid-area: islem; text-align: right; }
         td.col-islem a.incele-btn { padding: 9px 18px; font-size: 13.5px; border-radius: 8px; }
+
+        .ai-fab { right: 14px; bottom: 14px; padding: 12px 18px; font-size: 14px; }
+        .ai-panel { right: 12px; left: 12px; bottom: 72px; width: auto; max-width: none; height: 72vh; }
     }
 </style>
 </head>
@@ -276,6 +376,7 @@
 
 <div class="container">
     <div class="top-bar">
+        <div class="rate-badge" id="kurRozeti">💱 Canlı Kur: Yükleniyor...</div>
         <button class="theme-toggle" id="themeBtn" onclick="temaDegistir()">🌙 Gece Modu</button>
     </div>
 
@@ -334,6 +435,38 @@
     </table>
 </div>
 
+<!-- SAĞ ALT YAPAY ZEKA (GEMINI AI) BUTONU VE PANELİ -->
+<button class="ai-fab" onclick="aiPanelAcKapat()">
+    <span>🤖</span> <span>AI Proje Asistanı</span>
+</button>
+
+<div class="ai-panel" id="aiPanel">
+    <div class="ai-header">
+        <div>
+            <div class="ai-header-title">🤖 KomponentBul AI Asistan</div>
+            <div class="ai-header-sub">Projeni yaz, malzemeleri ve canlı fiyatları çıkarsın!</div>
+        </div>
+        <button class="ai-close-btn" onclick="aiPanelAcKapat()">✕</button>
+    </div>
+
+    <div class="ai-quick-bar">
+        <button class="ai-chip" onclick="aiHazirSor('Bana çizgi çizen bir robot yap')">🖍️ Çizgi Çizen Robot</button>
+        <button class="ai-chip" onclick="aiHazirSor('Engelden kaçan robot malzemeleri')">🚗 Engelden Kaçan Robot</button>
+        <button class="ai-chip" onclick="aiHazirSor('5V regüleli güç kaynağı devresi')">⚡ 5V Güç Kaynağı</button>
+    </div>
+
+    <div class="ai-body" id="aiChatBody">
+        <div class="ai-msg">
+            Merhaba! 👋 Yapmak istediğin devreyi veya robotu yaz (örneğin: <b>"Bana çizgi çizen bir robot yap"</b>), sana gereken malzemeleri ve 11 sitedeki <b>en ucuz canlı fiyatlarını</b> hemen çıkarayım!
+        </div>
+    </div>
+
+    <div class="ai-footer">
+        <input type="text" id="aiPromptInput" placeholder="Örn: Çizgi çizen bir robot yap...">
+        <button class="ai-send-btn" onclick="aiSor()">Gönder</button>
+    </div>
+</div>
+
 <script>
 const API_BASE = window.location.hostname.includes('onrender.com') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? '' : 'https://komponentbul.onrender.com';
@@ -341,6 +474,7 @@ const API_BASE = window.location.hostname.includes('onrender.com') || window.loc
 let tumSonuclar = [];
 let sonArananKod = "";
 let aramaMesajTimer = null;
+let parcaFiyatHafizasi = {};
 
 const ACILIS_MESAJLARI = [
     "⚡ Uygulama başlatılıyor, güç kaynağı 5V'a sabitleniyor...",
@@ -356,6 +490,12 @@ const ARAMA_MESAJLARI = [
     "💱 Dolar ve Euro fiyatlar güncel kurla TL'ye çevriliyor...",
     "📊 Multimetre en ucuz fiyatları küçükten büyüğe diziyor..."
 ];
+
+function kurlariGoster(kurlar) {
+    if (!kurlar || !kurlar.USD) return;
+    const rozet = document.getElementById('kurRozeti');
+    rozet.innerHTML = `💱 Canlı Kur: <strong>1$ = ${kurlar.USD} TL</strong> | <strong>1€ = ${kurlar.EUR} TL</strong>`;
+}
 
 function temaUygula(karanlikMi) {
     const btn = document.getElementById('themeBtn');
@@ -379,7 +519,10 @@ async function acilisAnimasyonuBaslat() {
     const statusText = document.getElementById('bootStatusText');
     const progressBar = document.getElementById('bootProgressBar');
 
-    fetch(`${API_BASE}/ping`, { mode: 'cors' }).catch(() => {});
+    fetch(`${API_BASE}/ping`, { mode: 'cors' })
+        .then(r => r.json())
+        .then(d => { if (d.kurlar) kurlariGoster(d.kurlar); })
+        .catch(() => {});
 
     let adim = 0;
     let yuzde = 20;
@@ -468,6 +611,13 @@ async function ara() {
     const kod = document.getElementById('searchInput').value.trim();
     if (!kod) { alert("Lütfen bir parça kodu girin."); return; }
 
+    if (parcaFiyatHafizasi[kod]) {
+        tumSonuclar = parcaFiyatHafizasi[kod];
+        sonArananKod = kod;
+        tabloyuCiz(tumSonuclar);
+        return;
+    }
+
     const loadingCard = document.getElementById('loadingCard');
     const loadingText = document.getElementById('loadingText');
     const table = document.getElementById('resultsTable');
@@ -490,9 +640,12 @@ async function ara() {
         if (!response.ok) throw new Error("Sunucu yanıt vermedi.");
         const data = await response.json();
 
+        if (data.kurlar) kurlariGoster(data.kurlar);
+
         clearInterval(aramaMesajTimer);
         loadingCard.style.display = 'none';
         tumSonuclar = data.sonuclar || [];
+        parcaFiyatHafizasi[kod] = tumSonuclar;
         sonArananKod = kod;
         tabloyuCiz(tumSonuclar);
     } catch (error) {
@@ -503,8 +656,134 @@ async function ara() {
     }
 }
 
+/* --- YAPAY ZEKA (GEMINI AI) PANEL FONKSİYONLARI --- */
+function aiPanelAcKapat() {
+    const panel = document.getElementById('aiPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+        document.getElementById('aiPromptInput').focus();
+    }
+}
+
+function aiHazirSor(metin) {
+    document.getElementById('aiPromptInput').value = metin;
+    aiSor();
+}
+
+function tablodaParcaAra(kod) {
+    document.getElementById('searchInput').value = kod;
+    if (window.innerWidth <= 640) {
+        document.getElementById('aiPanel').classList.remove('open');
+    }
+    ara();
+    window.scrollTo({ top: 180, behavior: 'smooth' });
+}
+
+async function aiSor() {
+    const input = document.getElementById('aiPromptInput');
+    const prompt = input.value.trim();
+    if (!prompt) return;
+
+    const chatBody = document.getElementById('aiChatBody');
+    input.value = '';
+
+    chatBody.innerHTML += `<div class="ai-msg user">${prompt}</div>`;
+    const yukleniyorId = 'aiLoad_' + Date.now();
+    chatBody.innerHTML += `<div class="ai-msg" id="${yukleniyorId}">🤖 <i>Devre şeması ve malzeme listesi hazırlanıyor...</i></div>`;
+    chatBody.scrollTop = chatBody.scrollHeight;
+
+    try {
+        const res = await fetch(`${API_BASE}/ai-asistan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+        const veri = await res.json();
+        const kutu = document.getElementById(yukleniyorId);
+
+        if (veri.hata) {
+            kutu.innerHTML = `<span style="color:#ef4444;font-weight:600;">⚠️ ${veri.hata}</span>`;
+            return;
+        }
+
+        const paketId = 'paket_' + Date.now();
+        let html = `<div>${veri.aciklama || 'İşte gereken malzemeler:'}</div>`;
+
+        const malzemeler = veri.malzemeler || [];
+        malzemeler.forEach((m, idx) => {
+            const fiyatSlotId = `${paketId}_fiyat_${idx}`;
+            const guvenliKod = (m.arama_kodu || m.ad).replace(/'/g, "\\'");
+            html += `
+                <div class="ai-part-card">
+                    <div class="ai-part-top">
+                        <span class="ai-part-name">${m.ad}</span>
+                        <span class="ai-part-qty">${m.adet || '1 Adet'}</span>
+                    </div>
+                    <div class="ai-part-desc">${m.gorev || ''}</div>
+                    <div class="ai-part-bottom">
+                        <span class="ai-price-tag" id="${fiyatSlotId}">⏳ En ucuz fiyat aranıyor...</span>
+                        <button class="ai-search-jump" onclick="tablodaParcaAra('${guvenliKod}')">🔍 Tabloda Ara</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (malzemeler.length > 0) {
+            html += `<div class="ai-total-box" id="${paketId}_toplam">📊 Canlı proje maliyeti hesaplanıyor...</div>`;
+        }
+
+        kutu.innerHTML = html;
+        chatBody.scrollTop = chatBody.scrollHeight;
+
+        // Her malzeme için arka planda 11 sitedeki en ucuz canlı fiyatı çek
+        let toplamMaliyet = 0;
+        let bulunanSayisi = 0;
+
+        await Promise.all(malzemeler.map(async (m, idx) => {
+            const kod = m.arama_kodu || m.ad;
+            const slot = document.getElementById(`${paketId}_fiyat_${idx}`);
+            try {
+                const r = await fetch(`${API_BASE}/arama?q=${encodeURIComponent(kod)}&kategori=Hepsi`);
+                const d = await r.json();
+                const liste = d.sonuclar || [];
+                parcaFiyatHafizasi[kod] = liste;
+
+                const canliIlk = liste.find(x => x.Durum === "Canlı Veri");
+                if (canliIlk && slot) {
+                    slot.innerHTML = `🟢 En Ucuz: <a href="${canliIlk.Link}" target="_blank" style="color:#10b981;text-decoration:underline;">${canliIlk.Fiyat} (${canliIlk.Tedarikci}) ↗</a>`;
+                    const sayisal = parseFloat(canliIlk.Fiyat.replace(/[^0-9.,]/g, '').replace(',', '.'));
+                    if (!isNaN(sayisal)) {
+                        toplamMaliyet += sayisal;
+                        bulunanSayisi++;
+                    }
+                } else if (slot) {
+                    slot.innerHTML = `<span style="color:#94a3b8;">Stokta bulunamadı</span>`;
+                }
+            } catch (e) {
+                if (slot) slot.innerHTML = `<span style="color:#94a3b8;">Tabloda Ara'ya tıkla</span>`;
+            }
+        }));
+
+        const toplamKutu = document.getElementById(`${paketId}_toplam`);
+        if (toplamKutu) {
+            if (bulunanSayisi > 0) {
+                toplamKutu.innerHTML = `💰 En Ucuz Parçalarla Toplam: ~${toplamMaliyet.toFixed(2)} TL`;
+            } else {
+                toplamKutu.innerHTML = `🔍 Parçaların tüm fiyatlarını görmek için "Tabloda Ara" butonlarına tıklayın.`;
+            }
+        }
+        chatBody.scrollTop = chatBody.scrollHeight;
+    } catch (err) {
+        const kutu = document.getElementById(yukleniyorId);
+        if (kutu) kutu.innerHTML = `<span style="color:#ef4444;">Bağlantı hatası oluştu, lütfen tekrar deneyin.</span>`;
+    }
+}
+
 document.getElementById('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') ara();
+});
+document.getElementById('aiPromptInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') aiSor();
 });
 </script>
 </body>
