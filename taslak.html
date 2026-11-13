@@ -29,7 +29,6 @@
         margin: 0; padding: 36px 24px 90px 24px; transition: background-color 0.25s, color 0.25s; overflow-x: hidden;
     }
 
-    /* AÇILIŞ (BOOT) EKRANI */
     #bootOverlay {
         position: fixed; inset: 0; background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
         color: #f8fafc; display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -52,12 +51,10 @@
     .chip-pins-left { left: -13px; }
     .chip-pins-right { right: -13px; }
     .pin-h { width: 11px; height: 5px; background: #60a5fa; border-radius: 2px; animation: pinSpark 0.9s infinite alternate; }
-
     .chip-pins-top, .chip-pins-bottom { position: absolute; display: flex; flex-direction: row; gap: 12px; }
     .chip-pins-top { top: -13px; }
     .chip-pins-bottom { bottom: -13px; }
     .pin-v { width: 5px; height: 11px; background: #60a5fa; border-radius: 2px; animation: pinSpark 0.9s infinite alternate; }
-
     .pin-h:nth-child(2), .pin-v:nth-child(2) { animation-delay: 0.2s; }
     .pin-h:nth-child(3), .pin-v:nth-child(3) { animation-delay: 0.4s; }
     .pin-h:nth-child(4), .pin-v:nth-child(4) { animation-delay: 0.6s; }
@@ -110,7 +107,6 @@
     }
     .theme-toggle:hover { border-color: #3b82f6; }
 
-    /* BAŞLIK LOGOSU */
     .brand-header { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; user-select: none; }
     .circuit-wing { display: flex; align-items: center; width: 90px; flex-shrink: 1; }
     .circuit-wing svg { width: 100%; height: auto; }
@@ -128,7 +124,6 @@
     }
     p.sub { color: var(--text-sub); margin: 0 0 24px 0; text-align: center; font-weight: 500; font-size: 15px; line-height: 1.45; }
 
-    /* KATEGORİ & ARAMA */
     .category-selection {
         display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px 25px;
         margin-bottom: 18px; background: var(--card-bg); padding: 14px 18px; border-radius: 10px; border: 1px solid var(--border-color);
@@ -160,7 +155,6 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-msg { color: #3b82f6; font-weight: 700; font-size: 15px; }
 
-    /* TABLO */
     table {
         width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 12px;
         overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.08); border: 1px solid var(--border-color); display: none;
@@ -182,7 +176,7 @@
         border-radius: 6px; font-size: 13px; text-decoration: none; font-weight: 600;
     }
 
-    /* --- SAĞ ALT YAPAY ZEKA (GEMINI AI) PANELİ --- */
+    /* SAĞ ALT YAPAY ZEKA PANELİ */
     .ai-fab {
         position: fixed; right: 24px; bottom: 24px; z-index: 9000;
         background: linear-gradient(135deg, #2563eb, #10b981); color: #ffffff;
@@ -273,7 +267,6 @@
         border-radius: 8px; font-weight: 700; font-size: 13.5px; cursor: pointer; white-space: nowrap;
     }
 
-    /* TABLET (641px - 900px) */
     @media (max-width: 900px) {
         body { padding: 24px 16px 90px 16px; }
         .circuit-wing { width: 55px; }
@@ -281,7 +274,6 @@
         th, td { padding: 12px; font-size: 14px; }
     }
 
-    /* TELEFON / MOBİL (≤ 640px) */
     @media (max-width: 640px) {
         body { padding: 14px 12px 90px 12px; }
         .circuit-wing { display: none; }
@@ -435,7 +427,6 @@
     </table>
 </div>
 
-<!-- SAĞ ALT YAPAY ZEKA (GEMINI AI) BUTONU VE PANELİ -->
 <button class="ai-fab" onclick="aiPanelAcKapat()">
     <span>🤖</span> <span>AI Proje Asistanı</span>
 </button>
@@ -656,7 +647,6 @@ async function ara() {
     }
 }
 
-/* --- YAPAY ZEKA (GEMINI AI) PANEL FONKSİYONLARI --- */
 function aiPanelAcKapat() {
     const panel = document.getElementById('aiPanel');
     panel.classList.toggle('open');
@@ -689,15 +679,21 @@ async function aiSor() {
 
     chatBody.innerHTML += `<div class="ai-msg user">${prompt}</div>`;
     const yukleniyorId = 'aiLoad_' + Date.now();
-    chatBody.innerHTML += `<div class="ai-msg" id="${yukleniyorId}">🤖 <i>Devre şeması ve malzeme listesi hazırlanıyor...</i></div>`;
+    chatBody.innerHTML += `<div class="ai-msg" id="${yukleniyorId}">⚡ <i>Yapay zeka malzemeleri çıkarıyor...</i></div>`;
     chatBody.scrollTop = chatBody.scrollHeight;
+
+    const controller = new AbortController();
+    const aiTimeout = setTimeout(() => controller.abort(), 15000);
 
     try {
         const res = await fetch(`${API_BASE}/ai-asistan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
+            body: JSON.stringify({ prompt }),
+            signal: controller.signal
         });
+        clearTimeout(aiTimeout);
+
         const veri = await res.json();
         const kutu = document.getElementById(yukleniyorId);
 
@@ -735,18 +731,19 @@ async function aiSor() {
         kutu.innerHTML = html;
         chatBody.scrollTop = chatBody.scrollHeight;
 
-        // Her malzeme için arka planda 11 sitedeki en ucuz canlı fiyatı çek
+        // Sunucuyu kilitlememek için fiyatları SIRAYLA ve HIZLI MODDA (hizli=1) çek
         let toplamMaliyet = 0;
         let bulunanSayisi = 0;
 
-        await Promise.all(malzemeler.map(async (m, idx) => {
+        for (let idx = 0; idx < malzemeler.length; idx++) {
+            const m = malzemeler[idx];
             const kod = m.arama_kodu || m.ad;
             const slot = document.getElementById(`${paketId}_fiyat_${idx}`);
             try {
-                const r = await fetch(`${API_BASE}/arama?q=${encodeURIComponent(kod)}&kategori=Hepsi`);
+                const r = await fetch(`${API_BASE}/arama?q=${encodeURIComponent(kod)}&kategori=Hepsi&hizli=1`);
                 const d = await r.json();
                 const liste = d.sonuclar || [];
-                parcaFiyatHafizasi[kod] = liste;
+                if (liste.length > 0) parcaFiyatHafizasi[kod] = liste;
 
                 const canliIlk = liste.find(x => x.Durum === "Canlı Veri");
                 if (canliIlk && slot) {
@@ -757,12 +754,12 @@ async function aiSor() {
                         bulunanSayisi++;
                     }
                 } else if (slot) {
-                    slot.innerHTML = `<span style="color:#94a3b8;">Stokta bulunamadı</span>`;
+                    slot.innerHTML = `<span style="color:#94a3b8;">Tabloda Ara'ya tıkla</span>`;
                 }
             } catch (e) {
                 if (slot) slot.innerHTML = `<span style="color:#94a3b8;">Tabloda Ara'ya tıkla</span>`;
             }
-        }));
+        }
 
         const toplamKutu = document.getElementById(`${paketId}_toplam`);
         if (toplamKutu) {
@@ -774,8 +771,9 @@ async function aiSor() {
         }
         chatBody.scrollTop = chatBody.scrollHeight;
     } catch (err) {
+        clearTimeout(aiTimeout);
         const kutu = document.getElementById(yukleniyorId);
-        if (kutu) kutu.innerHTML = `<span style="color:#ef4444;">Bağlantı hatası oluştu, lütfen tekrar deneyin.</span>`;
+        if (kutu) kutu.innerHTML = `<span style="color:#ef4444;">Sunucu meşguldü, lütfen tekrar Gönder'e basın.</span>`;
     }
 }
 
