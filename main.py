@@ -106,12 +106,17 @@ USD_KUR = 34.50
 EUR_KUR = 37.50
 KUR_KAYNAK = "Varsayılan"
 
+# Hızlandırıcı Hafıza (Önbellek) ve Aktif AI Modeli
+ARAMA_ONBELLEK = {}
+ONBELLEK_SURESI = 600  # 10 dakika
+AKTIF_AI_MODEL = None
+
 def guncel_kurlari_cek():
     """Açık kaynaklı döviz API'lerinden (Frankfurter ECB & Open ER-API) anlık USD/TRY ve EUR/TRY kurlarını çeker."""
     global USD_KUR, EUR_KUR, KUR_KAYNAK
     try:
-        r_usd = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=USD&to=TRY", timeout=8)
-        r_eur = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=EUR&to=TRY", timeout=8)
+        r_usd = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=USD&to=TRY", timeout=6)
+        r_eur = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=EUR&to=TRY", timeout=6)
         if r_usd.status_code == 200 and r_eur.status_code == 200:
             u = float(r_usd.json().get("rates", {}).get("TRY", 0))
             e = float(r_eur.json().get("rates", {}).get("TRY", 0))
@@ -124,7 +129,7 @@ def guncel_kurlari_cek():
         pass
 
     try:
-        r_open = tls_requests.get("https://open.er-api.com/v6/latest/USD", timeout=8)
+        r_open = tls_requests.get("https://open.er-api.com/v6/latest/USD", timeout=6)
         if r_open.status_code == 200:
             rates = r_open.json().get("rates", {})
             try_rate = float(rates.get("TRY", 0))
@@ -195,7 +200,7 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
     kategori_adi = ayarlar["kategori"]
 
     try:
-        res = tls_requests.get(arama_url, headers=TR_HEADERS, impersonate="chrome110", timeout=15)
+        res = tls_requests.get(arama_url, headers=TR_HEADERS, impersonate="chrome110", timeout=6)
         if res.status_code != 200:
             return bulunanlar
 
@@ -210,7 +215,7 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
         else:
             ps_url = ps_href
 
-        res_ps = tls_requests.get(ps_url, headers=TR_HEADERS, impersonate="chrome110", timeout=15)
+        res_ps = tls_requests.get(ps_url, headers=TR_HEADERS, impersonate="chrome110", timeout=6)
         if res_ps.status_code != 200:
             return bulunanlar
 
@@ -219,7 +224,7 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
             try:
                 veri = json.loads(sc.string or "")
                 if veri.get("@type") == "ItemList" and "itemListElement" in veri:
-                    for el in veri["itemListElement"][:8]:
+                    for el in veri["itemListElement"][:6]:
                         urun_bilgi = el.get("item", el)
                         isim = urun_bilgi.get("name", "").strip()
                         aciklama = urun_bilgi.get("description", "").strip()
@@ -264,8 +269,8 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
                     break
             except Exception:
                 continue
-    except Exception as e:
-        print(f"[{ad}] HATA: {str(e)}")
+    except Exception:
+        pass
 
     return bulunanlar
 
@@ -288,7 +293,7 @@ def site_tara(ad, ayarlar, ham_sorgu):
         url = ayarlar["url_sablonu"].format(q_encoded)
 
         try:
-            res = tls_requests.get(url, headers=TR_HEADERS, impersonate="chrome110", timeout=15)
+            res = tls_requests.get(url, headers=TR_HEADERS, impersonate="chrome110", timeout=6)
 
             if res.status_code == 200:
                 soup = BeautifulSoup(res.text, 'html.parser')
@@ -303,7 +308,7 @@ def site_tara(ad, ayarlar, ham_sorgu):
                 sayac = 0
 
                 for urun in urunler:
-                    if sayac >= 8:
+                    if sayac >= 6:
                         break
 
                     try:
@@ -331,7 +336,7 @@ def site_tara(ad, ayarlar, ham_sorgu):
 
                                 yasakli_kelimeler = [
                                     "incele", "sepete ekle", "favori", "karşılaştır", "karsilastir",
-                                    "listeye", "stokta", "tükendi", "kargo", "haber ver", "hızlı al", "satın al"
+                                    "listeye", "stokta", "tükendi", "kargo", "haber ver", "hızlı al", "satın al", "bugünkargoda", "bugün kargoda"
                                 ]
 
                                 if len(text) > len(isim) and not any(y in lower_text for y in yasakli_kelimeler):
@@ -427,8 +432,8 @@ def site_tara(ad, ayarlar, ham_sorgu):
                         sayac += 1
                     except Exception:
                         continue
-        except Exception as e:
-            print(f"[{ad}] HATA: {str(e)}")
+        except Exception:
+            pass
 
         if bulunanlar:
             break
@@ -440,51 +445,43 @@ class AIProjeIstegi(BaseModel):
 
 SISTEM_TALIMATI = (
     "Sen KomponentBul elektronik komponent karşılaştırma platformunun uzman elektronik ve robotik mühendisi "
-    "yapay zeka asistanısın. Kullanıcı bir proje, robot veya devre yapmak istediğinde Türkçe olarak kısa, "
-    "anlaşılır bir proje özeti yaz ve gereken temel elektronik malzemeleri listele. "
+    "yapay zeka asistanısın. Kullanıcı bir proje, robot veya devre yapmak istediğinde Türkçe olarak 1-2 cümlelik "
+    "kısa bir proje özeti yaz ve gereken EN TEMEL 4 elektronik malzemeyi listele. "
     "Her malzemenin 'arama_kodu' alanına Türkiye'deki elektronik sitelerinde aratıldığında doğrudan "
     "ürünü bulacak kısa ve standart parça adını/kodunu yaz (Örn: 'Arduino Uno', 'L298N', 'SG90 Servo', "
-    "'HC-SR04', 'TCRT5000', 'LM358', 'BC547'). En fazla 6 temel malzeme öner. "
+    "'HC-SR04', 'TCRT5000', 'LM358', 'BC547'). En fazla 4 temel malzeme öner. "
     "Yanıtı SADECE şu JSON şemasında ver: "
     '{"aciklama": "Proje özeti...", "malzemeler": [{"ad": "...", "arama_kodu": "...", "adet": "...", "gorev": "..."}]}'
 )
 
-def gemini_yetkili_model_ile_uret(api_key: str, kullanici_prompt: str):
-    """API anahtarının Google AI Studio'da yetkili olduğu modelleri otomatik tespit edip JSON yanıt üretir."""
-    aday_modeller = []
-    try:
-        r_models = tls_requests.get(
-            f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
-            timeout=10
-        )
-        if r_models.status_code == 200:
-            for m in r_models.json().get("models", []):
-                isim = m.get("name", "")
-                metodlar = m.get("supportedGenerationMethods", [])
-                if "generateContent" in metodlar and "gemini" in isim.lower():
-                    aday_modeller.append(isim)
-    except Exception:
-        pass
+def gemini_hizli_uret(api_key: str, kullanici_prompt: str):
+    """Çalışan Gemini modelini hafızada tutarak beklemeden 2 saniyede JSON yanıt üretir."""
+    global AKTIF_AI_MODEL
 
-    # Flash modellerini öne al
-    aday_modeller.sort(key=lambda x: (0 if "flash" in x.lower() else 1, x))
-    for varsayilan in ["models/gemini-2.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash"]:
-        if varsayilan not in aday_modeller:
-            aday_modeller.append(varsayilan)
+    oncelikli_modeller = [
+        "models/gemini-2.5-flash",
+        "models/gemini-2.0-flash",
+        "models/gemini-flash-latest"
+    ]
+    if AKTIF_AI_MODEL and AKTIF_AI_MODEL in oncelikli_modeller:
+        oncelikli_modeller.remove(AKTIF_AI_MODEL)
+        oncelikli_modeller.insert(0, AKTIF_AI_MODEL)
 
-    son_hata = "Uygun model bulunamadı"
-    for model_yolu in aday_modeller[:5]:
+    payload = {
+        "systemInstruction": {"parts": [{"text": SISTEM_TALIMATI}]},
+        "contents": [{"role": "user", "parts": [{"text": kullanici_prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json"}
+    }
+
+    son_hata = "Model yanıt vermedi"
+    for model_yolu in oncelikli_modeller:
         url = f"https://generativelanguage.googleapis.com/v1beta/{model_yolu}:generateContent?key={api_key}"
-        payload = {
-            "systemInstruction": {"parts": [{"text": SISTEM_TALIMATI}]},
-            "contents": [{"role": "user", "parts": [{"text": kullanici_prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json"}
-        }
         try:
-            r = tls_requests.post(url, json=payload, timeout=20)
+            r = tls_requests.post(url, json=payload, timeout=10)
             if r.status_code == 200:
                 adaylar = r.json().get("candidates", [])
                 if adaylar:
+                    AKTIF_AI_MODEL = model_yolu
                     metin = adaylar[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                     temiz_json = re.sub(r"^```(?:json)?|```$", "", metin.strip(), flags=re.MULTILINE).strip()
                     return json.loads(temiz_json)
@@ -504,44 +501,18 @@ def ai_proje_asistani(istek: AIProjeIstegi):
             "hata": "Sunucuda GEMINI_API_KEY tanımlı değil. Lütfen Render Environment Variables kısmına GEMINI_API_KEY ekleyin."
         }
 
-    # 1. Birincil SDK denemesi
     try:
-        client = genai.Client(api_key=api_key)
-        interaction = client.interactions.create(
-            model="gemini-3.8-flash",
-            store=False,
-            system_instruction=SISTEM_TALIMATI,
-            input=istek.prompt,
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "aciklama": {"type": "string"},
-                        "malzemeler": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "ad": {"type": "string"},
-                                    "arama_kodu": {"type": "string"},
-                                    "adet": {"type": "string"},
-                                    "gorev": {"type": "string"}
-                                },
-                                "required": ["ad", "arama_kodu", "adet", "gorev"]
-                            }
-                        }
-                    },
-                    "required": ["aciklama", "malzemeler"]
-                }
-            }
-        )
-        return json.loads(interaction.output_text)
+        return gemini_hizli_uret(api_key, istek.prompt)
     except Exception:
-        # 2. Ücretsiz API Anahtarı Yetkili Model Otomatik Yedeği (403 Permission Denied Çözümü)
         try:
-            return gemini_yetkili_model_ile_uret(api_key, istek.prompt)
+            client = genai.Client(api_key=api_key)
+            interaction = client.interactions.create(
+                model="gemini-3.8-flash",
+                store=False,
+                system_instruction=SISTEM_TALIMATI,
+                input=istek.prompt
+            )
+            return json.loads(interaction.output_text)
         except Exception as e2:
             return {"hata": f"Yapay zeka yanıt üretirken hata oluştu: {str(e2)}"}
 
@@ -562,6 +533,17 @@ def ana_sayfa():
 
 @app.get("/arama")
 def arama_yap(q: str, kategori: str = "Hepsi"):
+    simdi = time.time()
+    onbellek_anahtari = f"{q.strip().lower()}_{kategori.strip().lower()}"
+
+    if onbellek_anahtari in ARAMA_ONBELLEK:
+        kayit_zamani, kayitli_sonuc = ARAMA_ONBELLEK[onbellek_anahtari]
+        if simdi - kayit_zamani < ONBELLEK_SURESI:
+            return {
+                "sonuclar": kayitli_sonuc,
+                "kurlar": {"USD": round(USD_KUR, 2), "EUR": round(EUR_KUR, 2), "kaynak": KUR_KAYNAK}
+            }
+
     sonuclar = []
     kategori_kucuk = kategori.strip().lower()
 
@@ -590,6 +572,9 @@ def arama_yap(q: str, kategori: str = "Hepsi"):
     sonuclar = benzersiz_sonuclar
 
     sonuclar.sort(key=lambda x: fiyat_temizle(x["fiyat_metni"]))
+    if sonuclar:
+        ARAMA_ONBELLEK[onbellek_anahtari] = (simdi, sonuclar)
+
     return {
         "sonuclar": sonuclar,
         "kurlar": {
