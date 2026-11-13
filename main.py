@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bs4 import BeautifulSoup
 import urllib.parse
+import urllib.request
 import concurrent.futures
 import threading
 import time
@@ -106,13 +107,111 @@ USD_KUR = 34.50
 EUR_KUR = 37.50
 KUR_KAYNAK = "Varsayılan"
 
-# Hızlandırıcı Hafıza (Önbellek) ve Aktif AI Modeli
 ARAMA_ONBELLEK = {}
-ONBELLEK_SURESI = 600  # 10 dakika
+ONBELLEK_SURESI = 1800  # 30 dakika
+AI_OGRENME_HAFIZASI = {}
 AKTIF_AI_MODEL = None
 
+EGITILMIS_PROJELER = [
+    {
+        "anahtarlar": ["çizgi", "cizgi", "izleyen", "çizen"],
+        "veri": {
+            "aciklama": "Çizgi çizen / izleyen robot; zemindeki çizgiyi kızılötesi sensörlerle algılayıp motor sürücü üzerinden tekerlekleri ve kalem servosunu kontrol eder.",
+            "malzemeler": [
+                {"ad": "Arduino Uno R3 Anakart", "arama_kodu": "Arduino Uno", "adet": "1 Adet", "gorev": "Sensör verilerini işleyip motorları yöneten ana kontrolcü"},
+                {"ad": "L298N Çift Kanallı Motor Sürücü", "arama_kodu": "L298N", "adet": "1 Adet", "gorev": "DC motorların hız ve yön kontrolü"},
+                {"ad": "TCRT5000 Kızılötesi Çizgi Sensörü", "arama_kodu": "TCRT5000", "adet": "2 Adet", "gorev": "Zemindeki çizgiyi algılama"},
+                {"ad": "SG90 Mikro Servo Motor", "arama_kodu": "SG90", "adet": "1 Adet", "gorev": "Kalemi indirip kaldırma mekanizması"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["engel", "kaça", "kaca", "ultrasonik", "mesafe", "park"],
+        "veri": {
+            "aciklama": "Engelden kaçan robot; ultrasonik ses dalgalarıyla önündeki engelin uzaklığını ölçüp çarpmadan otomatik yön değiştirir.",
+            "malzemeler": [
+                {"ad": "Arduino Uno R3", "arama_kodu": "Arduino Uno", "adet": "1 Adet", "gorev": "Mesafe hesaplama ve karar verme birimi"},
+                {"ad": "HC-SR04 Ultrasonik Mesafe Sensörü", "arama_kodu": "HC-SR04", "adet": "1 Adet", "gorev": "Engel mesafesini santimetre olarak ölçme"},
+                {"ad": "L298N Motor Sürücü Kartı", "arama_kodu": "L298N", "adet": "1 Adet", "gorev": "Tekerlek motorlarını sürme"},
+                {"ad": "SG90 Servo Motor", "arama_kodu": "SG90", "adet": "1 Adet", "gorev": "Sensörü sağa-sola döndürerek tarama yapma"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["5v", "güç kaynağı", "guc kaynagi", "regüle", "regule", "7805", "adaptör"],
+        "veri": {
+            "aciklama": "5V regüleli doğru akım güç kaynağı; 9V-12V giriş gerilimini mikrodenetleyiciler için sabit 5V çıkışa dönüştürür.",
+            "malzemeler": [
+                {"ad": "L7805CV 5V Voltaj Regülatörü", "arama_kodu": "L7805", "adet": "1 Adet", "gorev": "Gerilimi sabit 5V seviyesine düşürme"},
+                {"ad": "1N4007 Doğrultucu Diyot", "arama_kodu": "1N4007", "adet": "4 Adet", "gorev": "Ters kutup koruması ve doğrultma"},
+                {"ad": "100uF Elektrolitik Kondansatör", "arama_kodu": "100uF", "adet": "2 Adet", "gorev": "Gerilim dalgalanmalarını filtreleme"},
+                {"ad": "5mm Kırmızı LED", "arama_kodu": "5mm LED", "adet": "1 Adet", "gorev": "Güç açık gösterge ışığı"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["sulama", "toprak", "nem", "bitki", "çiçek"],
+        "veri": {
+            "aciklama": "Otomatik bitki sulama sistemi; toprağın nem oranını ölçerek toprak kuruduğunda röle yardımıyla su motorunu çalıştırır.",
+            "malzemeler": [
+                {"ad": "Arduino Uno R3", "arama_kodu": "Arduino Uno", "adet": "1 Adet", "gorev": "Nem verisini okuyup pompayı tetikleme"},
+                {"ad": "Toprak Nem Sensörü Modülü", "arama_kodu": "Toprak Nem", "adet": "1 Adet", "gorev": "Topraktaki ıslaklık seviyesini ölçme"},
+                {"ad": "5V Tek Kanallı Röle Kartı", "arama_kodu": "5V Role", "adet": "1 Adet", "gorev": "Su pompasını güvenli şekilde açıp kapatma"},
+                {"ad": "Mini Dalgıç Su Pompası", "arama_kodu": "Su Pompasi", "adet": "1 Adet", "gorev": "Hazneden toprağa su aktarma"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["akıllı ev", "akilli ev", "iot", "wifi", "esp32", "esp8266"],
+        "veri": {
+            "aciklama": "Wi-Fi tabanlı Akıllı Ev ve IoT sistemi; telefon üzerinden cihazları açıp kapatır ve oda sıcaklığını canlı izler.",
+            "malzemeler": [
+                {"ad": "ESP32 Wi-Fi + Bluetooth Kartı", "arama_kodu": "ESP32", "adet": "1 Adet", "gorev": "Kablosuz internet bağlantısı ve ana işlemci"},
+                {"ad": "DHT11 Sıcaklık ve Nem Sensörü", "arama_kodu": "DHT11", "adet": "1 Adet", "gorev": "Ortam sıcaklık ve nem ölçümü"},
+                {"ad": "5V Röle Modülü", "arama_kodu": "5V Role", "adet": "1 Adet", "gorev": "Ev cihazlarını anahtarlama"},
+                {"ad": "Breadboard Devre Tahtası", "arama_kodu": "Breadboard", "adet": "1 Adet", "gorev": "Lehimsiz devre kurulumu"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["alarm", "hırsız", "hirsiz", "hareket", "pir", "yangın", "gaz", "duman"],
+        "veri": {
+            "aciklama": "Güvenlik ve alarm devresi; ortamdaki hareketi veya gaz/duman sızıntısını algılayarak sesli buzzer ile uyarı verir.",
+            "malzemeler": [
+                {"ad": "HC-SR501 PIR Hareket Sensörü", "arama_kodu": "HC-SR501", "adet": "1 Adet", "gorev": "İnsan hareketini algılama"},
+                {"ad": "MQ-2 Gaz ve Duman Sensörü", "arama_kodu": "MQ-2", "adet": "1 Adet", "gorev": "Yanıcı gaz ve duman tespiti"},
+                {"ad": "5V Aktif Buzzer", "arama_kodu": "Buzzer", "adet": "1 Adet", "gorev": "Sesli siren uyarısı"},
+                {"ad": "BC547 NPN Transistör", "arama_kodu": "BC547", "adet": "1 Adet", "gorev": "Buzzer akımını anahtarlama"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["çakar", "cakar", "flip", "flop", "ne555", "555", "flaşör", "led yak"],
+        "veri": {
+            "aciklama": "NE555 entegreli çakar / flip-flop LED devresi; ayarlanabilir hızda sırayla yanıp sönen sinyal devresidir.",
+            "malzemeler": [
+                {"ad": "NE555 Zamanlayıcı Entegresi", "arama_kodu": "NE555", "adet": "1 Adet", "gorev": "Kare dalga saat sinyali üretme"},
+                {"ad": "BC547 NPN Transistör", "arama_kodu": "BC547", "adet": "2 Adet", "gorev": "LED gruplarını anahtarlama"},
+                {"ad": "5mm Kırmızı LED", "arama_kodu": "5mm LED", "adet": "4 Adet", "gorev": "Görsel ışık çıkışı"},
+                {"ad": "220 Ohm Direnç", "arama_kodu": "220 Ohm", "adet": "4 Adet", "gorev": "LED akım sınırlama koruması"}
+            ]
+        }
+    },
+    {
+        "anahtarlar": ["bluetooth", "araba", "rc araba", "hc-05", "hc05"],
+        "veri": {
+            "aciklama": "Bluetooth kontrollü robot araba; telefondan gönderilen yön komutlarını Bluetooth modülüyle alıp motorları sürer.",
+            "malzemeler": [
+                {"ad": "Arduino Uno R3", "arama_kodu": "Arduino Uno", "adet": "1 Adet", "gorev": "Komutları çözüp motorları yönetme"},
+                {"ad": "HC-05 Bluetooth Modülü", "arama_kodu": "HC-05", "adet": "1 Adet", "gorev": "Telefon ile kablosuz haberleşme"},
+                {"ad": "L298N Motor Sürücü", "arama_kodu": "L298N", "adet": "1 Adet", "gorev": "Motor hız ve yön kontrolü"},
+                {"ad": "6V Redüktörlü DC Motor", "arama_kodu": "DC Motor", "adet": "2 Adet", "gorev": "Tekerlek tahriki"}
+            ]
+        }
+    }
+]
+
 def guncel_kurlari_cek():
-    """Açık kaynaklı döviz API'lerinden (Frankfurter ECB & Open ER-API) anlık USD/TRY ve EUR/TRY kurlarını çeker."""
     global USD_KUR, EUR_KUR, KUR_KAYNAK
     try:
         r_usd = tls_requests.get("https://api.frankfurter.dev/v1/latest?from=USD&to=TRY", timeout=6)
@@ -193,14 +292,14 @@ def metni_sayiya_cevir(fiyat_metni):
     except Exception:
         return None
 
-def ozdisan_tara(ad, ayarlar, ham_sorgu):
+def ozdisan_tara(ad, ayarlar, ham_sorgu, zaman_asimi=5):
     bulunanlar = []
     q_encoded = urllib.parse.quote(ham_sorgu.strip())
     arama_url = ayarlar["url_sablonu"].format(q_encoded)
     kategori_adi = ayarlar["kategori"]
 
     try:
-        res = tls_requests.get(arama_url, headers=TR_HEADERS, impersonate="chrome110", timeout=6)
+        res = tls_requests.get(arama_url, headers=TR_HEADERS, impersonate="chrome110", timeout=zaman_asimi)
         if res.status_code != 200:
             return bulunanlar
 
@@ -215,7 +314,7 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
         else:
             ps_url = ps_href
 
-        res_ps = tls_requests.get(ps_url, headers=TR_HEADERS, impersonate="chrome110", timeout=6)
+        res_ps = tls_requests.get(ps_url, headers=TR_HEADERS, impersonate="chrome110", timeout=zaman_asimi)
         if res_ps.status_code != 200:
             return bulunanlar
 
@@ -274,9 +373,9 @@ def ozdisan_tara(ad, ayarlar, ham_sorgu):
 
     return bulunanlar
 
-def site_tara(ad, ayarlar, ham_sorgu):
+def site_tara(ad, ayarlar, ham_sorgu, zaman_asimi=5):
     if ayarlar["seciciler"].get("kutu") == "ozdisan_ozel":
-        return ozdisan_tara(ad, ayarlar, ham_sorgu)
+        return ozdisan_tara(ad, ayarlar, ham_sorgu, zaman_asimi)
 
     bulunanlar = []
     kategori_adi = ayarlar["kategori"]
@@ -293,7 +392,7 @@ def site_tara(ad, ayarlar, ham_sorgu):
         url = ayarlar["url_sablonu"].format(q_encoded)
 
         try:
-            res = tls_requests.get(url, headers=TR_HEADERS, impersonate="chrome110", timeout=6)
+            res = tls_requests.get(url, headers=TR_HEADERS, impersonate="chrome110", timeout=zaman_asimi)
 
             if res.status_code == 200:
                 soup = BeautifulSoup(res.text, 'html.parser')
@@ -444,57 +543,83 @@ class AIProjeIstegi(BaseModel):
     prompt: str
 
 SISTEM_TALIMATI = (
-    "Sen KomponentBul elektronik komponent karşılaştırma platformunun uzman elektronik ve robotik mühendisi "
-    "yapay zeka asistanısın. Kullanıcı bir proje, robot veya devre yapmak istediğinde Türkçe olarak 1-2 cümlelik "
-    "kısa bir proje özeti yaz ve gereken EN TEMEL 4 elektronik malzemeyi listele. "
+    "Sen KomponentBul elektronik komponent karşılaştırma platformunun uzman elektronik mühendisi "
+    "yapay zeka asistanısın. Kullanıcının istediği devre veya proje için 1-2 cümlelik kısa bir Türkçe özet yaz "
+    "ve gereken EN TEMEL 4 elektronik malzemeyi listele. "
     "Her malzemenin 'arama_kodu' alanına Türkiye'deki elektronik sitelerinde aratıldığında doğrudan "
-    "ürünü bulacak kısa ve standart parça adını/kodunu yaz (Örn: 'Arduino Uno', 'L298N', 'SG90 Servo', "
-    "'HC-SR04', 'TCRT5000', 'LM358', 'BC547'). En fazla 4 temel malzeme öner. "
+    "ürünü bulacak kısa standart kodu yaz (Örn: 'Arduino Uno', 'L298N', 'SG90', 'HC-SR04', 'TCRT5000', "
+    "'L7805', 'LM358', 'BC547', 'NE555', 'ESP32', 'DHT11', 'Buzzer'). "
     "Yanıtı SADECE şu JSON şemasında ver: "
     '{"aciklama": "Proje özeti...", "malzemeler": [{"ad": "...", "arama_kodu": "...", "adet": "...", "gorev": "..."}]}'
 )
 
-def gemini_hizli_uret(api_key: str, kullanici_prompt: str):
-    """Çalışan Gemini modelini hafızada tutarak beklemeden 2 saniyede JSON yanıt üretir."""
+def egitilmis_projelerden_bul(prompt_metni: str):
+    temiz = prompt_metni.strip().lower()
+    if temiz in AI_OGRENME_HAFIZASI:
+        return AI_OGRENME_HAFIZASI[temiz]
+
+    for kayit in EGITILMIS_PROJELER:
+        for anahtar in kayit["anahtarlar"]:
+            if anahtar in temiz:
+                return kayit["veri"]
+    return None
+
+def gemini_ultra_hizli_uret(api_key: str, kullanici_prompt: str):
+    """En güncel Gemini Flash-Lite ve 2.5 Flash modellerini sıfır düşünme gecikmesiyle (1 sn) çağırır."""
     global AKTIF_AI_MODEL
 
     oncelikli_modeller = [
+        "models/gemini-2.5-flash-lite",
         "models/gemini-2.5-flash",
-        "models/gemini-2.0-flash",
-        "models/gemini-flash-latest"
+        "models/gemini-2.0-flash"
     ]
     if AKTIF_AI_MODEL and AKTIF_AI_MODEL in oncelikli_modeller:
         oncelikli_modeller.remove(AKTIF_AI_MODEL)
         oncelikli_modeller.insert(0, AKTIF_AI_MODEL)
 
-    payload = {
-        "systemInstruction": {"parts": [{"text": SISTEM_TALIMATI}]},
-        "contents": [{"role": "user", "parts": [{"text": kullanici_prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json"}
-    }
-
     son_hata = "Model yanıt vermedi"
     for model_yolu in oncelikli_modeller:
         url = f"https://generativelanguage.googleapis.com/v1beta/{model_yolu}:generateContent?key={api_key}"
+        gen_config = {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 400,
+            "temperature": 0.2
+        }
+        if "2.5" in model_yolu:
+            gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+
+        payload = {
+            "systemInstruction": {"parts": [{"text": SISTEM_TALIMATI}]},
+            "contents": [{"role": "user", "parts": [{"text": kullanici_prompt}]}],
+            "generationConfig": gen_config
+        }
+        veri_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=veri_bytes, headers={"Content-Type": "application/json"}, method="POST")
+
         try:
-            r = tls_requests.post(url, json=payload, timeout=10)
-            if r.status_code == 200:
-                adaylar = r.json().get("candidates", [])
-                if adaylar:
-                    AKTIF_AI_MODEL = model_yolu
-                    metin = adaylar[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    temiz_json = re.sub(r"^```(?:json)?|```$", "", metin.strip(), flags=re.MULTILINE).strip()
-                    return json.loads(temiz_json)
-            else:
-                son_hata = f"{model_yolu} -> HTTP {r.status_code}"
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                if resp.status == 200:
+                    yanit_json = json.loads(resp.read().decode("utf-8"))
+                    adaylar = yanit_json.get("candidates", [])
+                    if adaylar:
+                        AKTIF_AI_MODEL = model_yolu
+                        metin = adaylar[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        temiz_json = re.sub(r"^```(?:json)?|```$", "", metin.strip(), flags=re.MULTILINE).strip()
+                        sonuc = json.loads(temiz_json)
+                        AI_OGRENME_HAFIZASI[kullanici_prompt.strip().lower()] = sonuc
+                        return sonuc
         except Exception as e:
-            son_hata = str(e)
+            son_hata = f"{model_yolu}: {str(e)}"
             continue
 
     raise RuntimeError(son_hata)
 
 @app.post("/ai-asistan")
 def ai_proje_asistani(istek: AIProjeIstegi):
+    hazir_yanit = egitilmis_projelerden_bul(istek.prompt)
+    if hazir_yanit:
+        return hazir_yanit
+
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         return {
@@ -502,7 +627,7 @@ def ai_proje_asistani(istek: AIProjeIstegi):
         }
 
     try:
-        return gemini_hizli_uret(api_key, istek.prompt)
+        return gemini_ultra_hizli_uret(api_key, istek.prompt)
     except Exception:
         try:
             client = genai.Client(api_key=api_key)
@@ -512,7 +637,9 @@ def ai_proje_asistani(istek: AIProjeIstegi):
                 system_instruction=SISTEM_TALIMATI,
                 input=istek.prompt
             )
-            return json.loads(interaction.output_text)
+            sonuc = json.loads(interaction.output_text)
+            AI_OGRENME_HAFIZASI[istek.prompt.strip().lower()] = sonuc
+            return sonuc
         except Exception as e2:
             return {"hata": f"Yapay zeka yanıt üretirken hata oluştu: {str(e2)}"}
 
@@ -520,6 +647,7 @@ def ai_proje_asistani(istek: AIProjeIstegi):
 def sunucu_durumu():
     return {
         "durum": "aktif",
+        "aktif_model": AKTIF_AI_MODEL or "Hazır",
         "kurlar": {
             "USD": round(USD_KUR, 2),
             "EUR": round(EUR_KUR, 2),
@@ -532,7 +660,7 @@ def ana_sayfa():
     return FileResponse("taslak.html")
 
 @app.get("/arama")
-def arama_yap(q: str, kategori: str = "Hepsi"):
+def arama_yap(q: str, kategori: str = "Hepsi", hizli: int = 0):
     simdi = time.time()
     onbellek_anahtari = f"{q.strip().lower()}_{kategori.strip().lower()}"
 
@@ -546,8 +674,9 @@ def arama_yap(q: str, kategori: str = "Hepsi"):
 
     sonuclar = []
     kategori_kucuk = kategori.strip().lower()
+    site_timeout = 3 if hizli == 1 else 5
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=11) as executor:
         gelecek_sonuclar = []
         for ad, ayarlar in TEDARIKCILER.items():
             site_kategori = ayarlar["kategori"].strip().lower()
@@ -556,7 +685,7 @@ def arama_yap(q: str, kategori: str = "Hepsi"):
                 if site_kategori != kategori_kucuk:
                     continue
 
-            gelecek_sonuclar.append(executor.submit(site_tara, ad, ayarlar, q))
+            gelecek_sonuclar.append(executor.submit(site_tara, ad, ayarlar, q, site_timeout))
 
         for gelecek in concurrent.futures.as_completed(gelecek_sonuclar):
             sonuclar.extend(gelecek.result())
